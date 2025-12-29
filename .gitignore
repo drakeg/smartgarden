@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment / secrets
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
+
+# Django
+db.sqlite3
+/staticfiles/
+staticfiles/
+media/
+media/*
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Node
+node_modules/
+
+# Misc
+*.swp
+*.swo
