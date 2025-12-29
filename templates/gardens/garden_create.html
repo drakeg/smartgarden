@@ -1,0 +1,30 @@
+{% extends "gardens/base.html" %}
+{% block title %}New Garden{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card shadow-sm rounded-4">
+      <div class="card-body p-4">
+        <h1 class="h5 mb-3">Create Garden</h1>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Garden name</label>
+            <input class="form-control" name="name" value="{{ form.name.value|default:'' }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Device</label>
+            <select class="form-select" name="device_type">
+              {% for val, label in form.fields.device_type.choices %}
+                <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-success">Create</button>
+          <a class="btn btn-outline-secondary" href="{% url 'gardens:garden_list' %}">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

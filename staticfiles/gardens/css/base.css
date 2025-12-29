@@ -1,0 +1,49 @@
+    /* Portrait-first layout */
+    .tray {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 24px;
+      padding: 16px;
+      position: relative;
+      min-height: 360px;
+    }
+
+    /* 12-pod portrait grid: 3 columns x 4 rows (simple + mobile-friendly) */
+    .pod-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .pod {
+      border-radius: 999px;
+      aspect-ratio: 1 / 1;
+      border: 2px solid #ced4da;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 6px;
+      cursor: pointer;
+      transition: transform .05s ease-in-out;
+    }
+    .pod:hover { transform: scale(1.02); }
+    .pod .pos { font-size: .75rem; color: #6c757d; }
+    .pod .label { font-weight: 600; font-size: .9rem; line-height: 1.1; }
+    .pod .days { font-size: .75rem; color: #198754; }
+
+    .sidepanel {
+      border: 1px solid #dee2e6;
+      border-radius: 16px;
+      padding: 14px;
+      background: #fff;
+      min-height: 360px;
+      position: sticky;
+      top: 12px;
+    }
+
+    .muted { color: #6c757d; }

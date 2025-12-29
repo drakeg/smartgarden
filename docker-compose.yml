@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    # For dev we run migrations then Django devserver so code changes mount immediately.
+    command: bash -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app:cached
+      - staticfiles:/app/staticfiles
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=replace-me
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+    depends_on: []
+
+  # Optional Postgres service (uncomment to use Postgres in development)
+  # db:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_DB: smartgarden
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+
+volumes:
+  staticfiles:
+  # pgdata:

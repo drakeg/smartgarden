@@ -1,0 +1,184 @@
+{% extends "gardens/base.html" %}
+{% load static %}
+{% block title %}{{ garden.name }}{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'gardens/css/garden_detail.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-0">{{ garden.name }}</h1>
+    <div class="muted small">
+      {{ garden.get_device_type_display }}
+      {% if is_guest %}
+        • <span class="badge text-bg-info">Guest</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'gardens:garden_list' %}">
+      Back
+    </a>
+
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'gardens:garden_export_json' garden.id %}">
+      Export JSON
+    </a>
+    
+    <form method="post" action="{% url 'gardens:garden_toggle_public' garden.id %}">
+      {% csrf_token %}
+      {% if garden.is_public %}
+        <button class="btn btn-outline-danger btn-sm">Disable Public Link</button>
+      {% else %}
+        <button class="btn btn-outline-success btn-sm">Enable Public Link</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Public link banner -->
+{% if garden.is_public %}
+  <div class="alert alert-success py-2 mb-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="small">
+        Public link:
+        <a href="{% url 'gardens:garden_public' garden.share_slug %}">
+          {% url 'gardens:garden_public' garden.share_slug %}
+        </a>
+      </div>
+      <a class="btn btn-sm btn-outline-success"
+         href="{% url 'gardens:garden_public' garden.share_slug %}">
+        View Public Page
+      </a>
+    </div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+
+  <!-- LEFT COLUMN: Device Layout -->
+  <div class="col-12 col-lg-7">
+
+    <!-- Orientation indicator card removed to simplify layout -->
+
+    {% if svg_text and pod_map %}
+      <!-- ================= SVG MODE ================= -->
+      <div class="tray shadow-sm position-relative sg-tray">
+
+        {# LEFT/RIGHT overlays #}
+        {% if front == "right" %}
+          <div class="sg-tray-edge sg-tray-front sg-tray-edge-right">FRONT</div>
+          <div class="sg-tray-edge sg-tray-back sg-tray-edge-left">BACK</div>
+        {% else %}
+          <div class="sg-tray-edge sg-tray-back sg-tray-edge-right">BACK</div>
+          <div class="sg-tray-edge sg-tray-front sg-tray-edge-left">FRONT</div>
+        {% endif %}
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="muted small">Click a pod to edit details</div>
+          <span class="badge text-bg-secondary">SVG Layout</span>
+        </div>
+
+        <div id="device-svg-wrap" class="bg-white border rounded-4 p-2">
+          {{ svg_text|safe }}
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const POD_MAP = {{ pod_map|safe }};
+          const gardenId = {{ garden.id }};
+
+          function clearSelected() {
+            POD_MAP.forEach(p => {
+              const el = document.getElementById(p.svg_id);
+              if (el) el.classList.remove("pod-selected");
+            });
+          }
+
+          POD_MAP.forEach(p => {
+            const el = document.getElementById(p.svg_id);
+            if (!el) return;
+
+            el.style.cursor = "pointer";
+            el.classList.add("pod-hit");
+
+            el.addEventListener("click", () => {
+              clearSelected();
+              el.classList.add("pod-selected");
+
+              const url = `/gardens/${gardenId}/pods/${p.position}/panel/`;
+              htmx.ajax("GET", url, "#sidepanel");
+            });
+          });
+        })();
+      </script>
+
+    {% else %}
+      <!-- ================= GRID FALLBACK MODE ================= -->
+      <div class="tray shadow-sm position-relative sg-tray">
+
+        {# LEFT/RIGHT overlays #}
+        {% if front == "left" %}
+          <div class="sg-tray-edge sg-tray-front sg-tray-edge-left">FRONT</div>
+          <div class="sg-tray-edge sg-tray-back sg-tray-edge-right">BACK</div>
+        {% else %}
+          <div class="sg-tray-edge sg-tray-back sg-tray-edge-left">BACK</div>
+          <div class="sg-tray-edge sg-tray-front sg-tray-edge-right">FRONT</div>
+        {% endif %}
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="muted small">Click a pod to edit details</div>
+          <span class="badge text-bg-secondary">Grid Layout</span>
+        </div>
+
+        <div class="pod-grid">
+          {% for row in grid_rows %}
+            {% for pod in row %}
+              <button
+                type="button"
+                class="pod"
+                hx-get="{% url 'gardens:pod_panel' garden.id pod.position %}"
+                hx-target="#sidepanel"
+                hx-swap="innerHTML"
+              >
+                <div class="pos">Pod {{ pod.position }}</div>
+
+                <div class="label">
+                  {{ pod.display_label|truncatechars:16 }}
+                </div>
+
+                {% if pod.days_growing %}
+                  <div class="days">
+                    {{ pod.days_growing }} day{% if pod.days_growing != 1 %}s{% endif %}
+                  </div>
+                {% else %}
+                  <div class="muted small">—</div>
+                {% endif %}
+              </button>
+            {% endfor %}
+          {% endfor %}
+        </div>
+
+        <div class="muted small text-center mt-3">
+          Portrait orientation • side panel stays visible while editing
+        </div>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <!-- RIGHT COLUMN: Side Panel -->
+  <div class="col-12 col-lg-5">
+    <div id="sidepanel" class="sidepanel shadow-sm">
+      <div class="muted">Select a pod to view or edit details.</div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

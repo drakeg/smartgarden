@@ -1,0 +1,98 @@
+<div class="d-flex justify-content-between align-items-start">
+  <div>
+    <div class="fw-semibold">Pod {{ pod.position }}</div>
+    <div class="muted small">Last updated: {{ pod.updated_at }}</div>
+  </div>
+</div>
+
+{% if error %}
+  <div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+{% if is_guest %}
+  <div class="alert alert-info py-2">
+    Guest mode: <strong>{{ guest_notes_remaining }}</strong> notes remaining.
+    Create an account to unlock more.
+  </div>
+{% endif %}
+
+<hr class="my-3">
+
+<form
+  hx-post="{% url 'gardens:pod_save' garden.id pod.position %}"
+  hx-target="#sidepanel"
+  hx-swap="innerHTML"
+>
+  {% csrf_token %}
+  <div class="mb-2">
+    <label class="form-label small">Plant name</label>
+    <input class="form-control" name="plant_name" value="{{ pod.plant_name }}">
+  </div>
+
+  <div class="mb-2">
+    <label class="form-label small">Planted date</label>
+    <input class="form-control" type="date" name="planted_at" value="{% if pod.planted_at %}{{ pod.planted_at|date:'Y-m-d' }}{% endif %}">
+    <div class="muted small mt-1">
+      {% if pod.days_growing is not None %}
+        Days growing: <strong>{{ pod.days_growing }}</strong>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label small">Status</label>
+    <select class="form-select" name="status">
+      {% for val,label in pod_form.fields.status.choices %}
+        <option value="{{ val }}" {% if pod.status == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <button class="btn btn-primary w-100">Save Pod</button>
+</form>
+
+<hr class="my-3">
+
+{% if not is_guest or guest_notes_remaining > 0 %}
+<form
+  class="mb-3"
+  hx-post="{% url 'gardens:pod_note_add' garden.id pod.position %}"
+  hx-target="#sidepanel"
+  hx-swap="innerHTML"
+  enctype="multipart/form-data"
+>
+{% else %}
+<div class="alert alert-secondary mb-3">
+  Note limit reached for guest mode.
+</div>
+{% endif %}
+
+  {% csrf_token %}
+  <label class="form-label small">Add note</label>
+  <textarea class="form-control mb-2" name="note" rows="3" placeholder="Germinated today… trimmed… algae… nutrients…"></textarea>
+  <label class="form-label small">Photo (optional)</label>
+  <input class="form-control mb-2" type="file" name="photo" accept="image/*">
+  <button class="btn btn-outline-success w-100">Add Note</button>
+
+{% if not is_guest or guest_notes_remaining > 0 %}
+</form>
+{% endif %}
+
+<div class="fw-semibold mb-2">Notes</div>
+{% if pod.notes.all %}
+  <div class="vstack gap-2">
+    {% for n in pod.notes.all %}
+      <div class="border rounded-3 p-2 bg-light">
+        <div class="muted small">{{ n.created_at }}</div>
+        <div style="white-space: pre-wrap;">{{ n.note }}</div>
+        {% if n.photo %}
+          <div class="mt-2">
+            <img src="{{ n.photo.url }}" class="img-fluid rounded-3" alt="pod photo">
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="muted">No notes yet.</div>
+{% endif %}

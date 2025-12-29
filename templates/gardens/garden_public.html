@@ -1,0 +1,24 @@
+{% extends "gardens/base.html" %}
+{% block title %}{{ garden.name }} (Public){% endblock %}
+{% block content %}
+<div class="mb-3">
+  <h1 class="h4 mb-0">{{ garden.name }}</h1>
+  <div class="muted small">{{ garden.get_device_type_display }} • Public view</div>
+</div>
+
+<div class="tray shadow-sm">
+  <div class="pod-grid">
+    {% for pod in pods %}
+      <div class="pod" style="cursor: default;">
+        <div class="pos">Pod {{ pod.position }}</div>
+        <div class="label">{{ pod.display_label|truncatechars:16 }}</div>
+        {% if pod.days_growing %}
+          <div class="days">{{ pod.days_growing }} day{% if pod.days_growing != 1 %}s{% endif %}</div>
+        {% else %}
+          <div class="muted small">—</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

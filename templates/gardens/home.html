@@ -1,0 +1,18 @@
+{% extends "gardens/base.html" %}
+{% block title %}Smart Garden{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm rounded-4">
+      <div class="card-body p-4">
+        <h1 class="h4">Track your countertop garden by pod position</h1>
+        <p class="muted mb-3">
+          Click pods, label plants, track planted dates, and keep notes — without trying to read tiny pod stickers.
+        </p>
+        <a class="btn btn-primary" href="{% url 'gardens:login' %}">Log in</a>
+        <a class="btn btn-outline-success ms-2" href="{% url 'gardens:guest_start' %}">Try it now (Guest)</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

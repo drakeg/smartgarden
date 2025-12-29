@@ -1,0 +1,6 @@
+Django>=6.0,<7.0
+gunicorn>=20.1.0
+whitenoise>=6.0
+psycopg2-binary>=2.9  # only needed for PostgreSQL deployments
+python-dotenv>=1.0.0  # optional: load env vars from .env
+dj-database-url>=1.0.0

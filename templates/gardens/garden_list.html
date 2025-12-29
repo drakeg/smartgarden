@@ -1,0 +1,31 @@
+{% extends "gardens/base.html" %}
+{% block title %}My Gardens{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h4 mb-0">My Gardens</h1>
+  <a class="btn btn-success" href="{% url 'gardens:garden_create' %}">New Garden</a>
+  <a class="btn btn-outline-primary" href="{% url 'gardens:garden_import_json' %}">Import</a>
+</div>
+
+<div class="row g-3">
+  {% for g in gardens %}
+    <div class="col-md-6">
+      <div class="card shadow-sm rounded-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <div class="fw-semibold">{{ g.name }}</div>
+              <div class="muted small">{{ g.get_device_type_display }}</div>
+            </div>
+            <a class="btn btn-sm btn-primary" href="{% url 'gardens:garden_detail' g.id %}">Open</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="col-12">
+      <div class="alert alert-info">No gardens yet. Create one.</div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
