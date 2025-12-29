@@ -1,5 +1,5 @@
 # CI status: replace <owner>/<repo> with your GitHub repo
-[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
+[![CI](https://github.com/drakeg/smartgarden/actions/workflows/ci.yml/badge.svg)](https://github.com/drakeg/smartgarden/actions/workflows/ci.yml)
 
 # Smart Garden
 
