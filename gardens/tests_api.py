@@ -37,8 +37,8 @@ class ApiTests(APITestCase):
     def test_gardens_filtering_and_search(self):
         # create two users and gardens
         other = User.objects.create_user(username='other', password='pass')
-        g1 = Garden.objects.create(owner=self.user, name='Alpha Garden', device_type='AHOPEGARDEN_12', is_public=True)
-        g2 = Garden.objects.create(owner=other, name='Beta Garden', device_type='AHOPEGARDEN_12', is_public=False)
+        Garden.objects.create(owner=self.user, name='Alpha Garden', device_type='AHOPEGARDEN_12', is_public=True)
+        Garden.objects.create(owner=other, name='Beta Garden', device_type='AHOPEGARDEN_12', is_public=False)
 
         # filter by owner username
         resp = self.client.get(f'/api/gardens/?owner__username={self.user.username}')

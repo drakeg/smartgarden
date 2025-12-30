@@ -25,13 +25,13 @@
 >
   {% csrf_token %}
   <div class="mb-2">
-    <label class="form-label small">Plant name</label>
-    <input class="form-control" name="plant_name" value="{{ pod.plant_name }}">
+    <label for="plant_name_{{ pod.position }}" class="form-label small">Plant name</label>
+    <input id="plant_name_{{ pod.position }}" class="form-control" name="plant_name" value="{{ pod.plant_name }}">
   </div>
 
   <div class="mb-2">
-    <label class="form-label small">Planted date</label>
-    <input class="form-control" type="date" name="planted_at" value="{% if pod.planted_at %}{{ pod.planted_at|date:'Y-m-d' }}{% endif %}">
+    <label for="planted_at_{{ pod.position }}" class="form-label small">Planted date</label>
+    <input id="planted_at_{{ pod.position }}" class="form-control" type="date" name="planted_at" value="{% if pod.planted_at %}{{ pod.planted_at|date:'Y-m-d' }}{% endif %}">
     <div class="muted small mt-1">
       {% if pod.days_growing is not None %}
         Days growing: <strong>{{ pod.days_growing }}</strong>
@@ -40,8 +40,8 @@
   </div>
 
   <div class="mb-3">
-    <label class="form-label small">Status</label>
-    <select class="form-select" name="status">
+    <label for="status_{{ pod.position }}" class="form-label small">Status</label>
+    <select id="status_{{ pod.position }}" class="form-select" name="status">
       {% for val,label in pod_form.fields.status.choices %}
         <option value="{{ val }}" {% if pod.status == val %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
@@ -68,10 +68,10 @@
 {% endif %}
 
   {% csrf_token %}
-  <label class="form-label small">Add note</label>
-  <textarea class="form-control mb-2" name="note" rows="3" placeholder="Germinated today… trimmed… algae… nutrients…"></textarea>
-  <label class="form-label small">Photo (optional)</label>
-  <input class="form-control mb-2" type="file" name="photo" accept="image/*">
+  <label for="note_{{ pod.position }}" class="form-label small">Add note</label>
+  <textarea id="note_{{ pod.position }}" class="form-control mb-2" name="note" rows="3" placeholder="Germinated today… trimmed… algae… nutrients…"></textarea>
+  <label for="photo_{{ pod.position }}" class="form-label small">Photo (optional)</label>
+  <input id="photo_{{ pod.position }}" class="form-control mb-2" type="file" name="photo" accept="image/*">
   <button class="btn btn-outline-success w-100">Add Note</button>
 
 {% if not is_guest or guest_notes_remaining > 0 %}
@@ -87,7 +87,7 @@
         <div style="white-space: pre-wrap;">{{ n.note }}</div>
         {% if n.photo %}
           <div class="mt-2">
-            <img src="{{ n.photo.url }}" class="img-fluid rounded-3" alt="pod photo">
+            <img src="{{ n.photo.url }}" class="img-fluid rounded-3" alt="pod">
           </div>
         {% endif %}
       </div>

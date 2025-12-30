@@ -88,10 +88,12 @@
         </div>
       </div>
 
+      {{ pod_map|json_script:"pod_map" }}
+      {{ garden.id|json_script:"garden_id" }}
       <script>
         (function () {
-          const POD_MAP = {{ pod_map|safe }};
-          const gardenId = {{ garden.id }};
+          const POD_MAP = JSON.parse(document.getElementById("pod_map").textContent);
+          const gardenId = JSON.parse(document.getElementById("garden_id").textContent);
 
           function clearSelected() {
             POD_MAP.forEach(p => {

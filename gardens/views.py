@@ -18,6 +18,16 @@ from .forms import GlobalNoteForm
 
 EXPORT_VERSION = 1
 
+# Common route / template constants to avoid duplicated literals
+GARDENS_HOME = "gardens:home"
+GARDEN_LIST = "gardens:garden_list"
+GARDEN_DETAIL = "gardens:garden_detail"
+GARDENS_LOGIN = "gardens:login"
+PARTIAL_POD_PANEL = "gardens/partials/pod_panel.html"
+GARDEN_IMPORT_JSON = "gardens:garden_import_json"
+GARDEN_GLOBAL_NOTES = "gardens:global_notes"
+PARTIAL_GLOBAL_NOTES_LIST = "gardens/partials/global_notes_list.html"
+
 # ---------------------------
 # Guest Mode Configuration
 # ---------------------------
@@ -72,6 +82,7 @@ def _garden_to_export_dict(garden: Garden) -> dict:
             })
 
         pods_payload.append({
+            # Common route / template constants to avoid duplicated literals
             "position": pod.position,
             "plant_name": pod.plant_name,
             "planted_at": pod.planted_at.isoformat() if pod.planted_at else None,
@@ -87,6 +98,107 @@ def _garden_to_export_dict(garden: Garden) -> dict:
         "pods": pods_payload,
     }
 
+
+# ---------------------------
+# Import helpers
+# ---------------------------
+def _parse_import_upload(upload) -> dict:
+    try:
+        raw = upload.read().decode("utf-8")
+        return json.loads(raw)
+    except Exception:
+        raise ValueError("That file is not valid JSON.")
+
+
+def _validate_import_data(data: dict) -> tuple[str, str, list]:
+    if not isinstance(data, dict) or data.get("version") != EXPORT_VERSION:
+        raise ValueError(f"Unsupported export version. Expected version={EXPORT_VERSION}.")
+
+    garden_name = (data.get("garden_name") or "Imported Garden").strip()[:120]
+    device_type = (data.get("device_type") or "GENERIC_12").strip()
+
+    pods_data = data.get("pods") or []
+    if not isinstance(pods_data, list) or len(pods_data) == 0:
+        raise ValueError("Import file has no pods.")
+
+    return garden_name, device_type, pods_data
+
+
+def _create_garden_from_import(user, garden_name: str, device_type: str) -> tuple[Garden, int]:
+    garden = Garden.objects.create(
+        owner=user,
+        is_guest=False,
+        guest_token="",
+        name=garden_name,
+        device_type=device_type,
+    )
+    template = get_device_template(device_type)
+    template_count = template.pod_count if template else 12
+    return garden, template_count
+
+
+def _get_pod_position(item: dict) -> int | None:
+    try:
+        pos = int(item.get("position"))
+    except Exception:
+        return None
+    if pos < 1:
+        return None
+    return pos
+
+
+def _apply_notes_to_pod(pod: Pod, notes: list) -> None:
+    if not isinstance(notes, list):
+        return
+    for n in notes:
+        note_text = (n.get("note") or "").strip()
+        if not note_text:
+            continue
+
+        created_at_raw = n.get("created_at")
+        created_at = timezone.now()
+        if created_at_raw:
+            try:
+                created_at = timezone.datetime.fromisoformat(created_at_raw)
+                if timezone.is_naive(created_at):
+                    created_at = timezone.make_aware(created_at)
+            except Exception:
+                created_at = timezone.now()
+
+        note_obj = PodNote.objects.create(pod=pod, note=note_text)
+        PodNote.objects.filter(id=note_obj.id).update(created_at=created_at)
+
+
+def _apply_single_pod(garden_obj: Garden, item: dict) -> None:
+    pos = _get_pod_position(item)
+    if pos is None:
+        return
+
+    pod, _created = Pod.objects.get_or_create(garden=garden_obj, position=pos)
+
+    pod.plant_name = (item.get("plant_name") or "")[:120]
+
+    planted_at = item.get("planted_at")
+    pod.planted_at = None
+    if planted_at:
+        try:
+            pod.planted_at = timezone.datetime.fromisoformat(planted_at).date()
+        except Exception:
+            pod.planted_at = None
+
+    status = item.get("status")
+    if status:
+        pod.status = status[:20]
+    pod.save()
+
+    notes = item.get("notes") or []
+    _apply_notes_to_pod(pod, notes)
+
+
+def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict]) -> None:
+    for pod_item in pods_list:
+        _apply_single_pod(garden_obj, pod_item)
+
 # ---------------------------
 # Auth + Home
 # ---------------------------
@@ -101,7 +213,7 @@ def home(request):
                 note = form.save(commit=False)
                 note.author = request.user
                 note.save()
-                return redirect("gardens:home")
+                return redirect(GARDENS_HOME)
         else:
             form = GlobalNoteForm()
 
@@ -112,20 +224,20 @@ def home(request):
     # Unauthenticated visitors: marketing / guest CTA
     return render(request, "gardens/home.html")
 
-def login_view(request):
+def login_view(request): 
     if request.method == "POST":
         username = request.POST.get("username", "")
         password = request.POST.get("password", "")
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return redirect("gardens:garden_list")
+            return redirect(GARDEN_LIST)
         return render(request, "gardens/login.html", {"error": "Invalid username or password."})
     return render(request, "gardens/login.html")
 
 def logout_view(request):
     logout(request)
-    return redirect("gardens:home")
+    return redirect(GARDENS_HOME)
 
 # ---------------------------
 # Guest Mode: "Try it now"
@@ -136,7 +248,7 @@ def guest_start(request):
     Create (or re-open) a guest garden tied to a cookie token.
     """
     if request.user.is_authenticated:
-        return redirect("gardens:garden_list")
+            return redirect(GARDEN_LIST)
 
     tok = _get_guest_token(request)
     if not tok:
@@ -144,13 +256,13 @@ def guest_start(request):
 
     existing = Garden.objects.filter(is_guest=True, guest_token=tok).order_by("-created_at")
     if existing.exists():
-        resp = redirect("gardens:garden_detail", garden_id=existing.first().id)
+        resp = redirect(GARDEN_DETAIL, garden_id=existing.first().id)
         resp.set_cookie(GUEST_COOKIE_NAME, tok, max_age=60 * 60 * 24 * 90, httponly=True, samesite="Lax")
         return resp
 
     # Enforce max guest gardens (per browser token)
     if existing.count() >= GUEST_MAX_GARDENS:
-        resp = redirect("gardens:garden_detail", garden_id=existing.first().id)
+        resp = redirect(GARDEN_DETAIL, garden_id=existing.first().id)
         resp.set_cookie(GUEST_COOKIE_NAME, tok, max_age=60 * 60 * 24 * 90, httponly=True, samesite="Lax")
         return resp
 
@@ -165,7 +277,7 @@ def guest_start(request):
     for pos in range(1, 13):
         Pod.objects.create(garden=garden, position=pos)
 
-    resp = redirect("gardens:garden_detail", garden_id=garden.id)
+    resp = redirect(GARDEN_DETAIL, garden_id=garden.id)
     resp.set_cookie(GUEST_COOKIE_NAME, tok, max_age=60 * 60 * 24 * 90, httponly=True, samesite="Lax")
     return resp
 
@@ -175,7 +287,7 @@ def guest_start(request):
 @require_http_methods(["GET", "POST"])
 def garden_list(request):
     if not request.user.is_authenticated:
-        return redirect("gardens:home")
+        return redirect(GARDENS_HOME)
 
     # Allow creating a GlobalNote from the gardens list page
     if request.method == "POST":
@@ -184,7 +296,7 @@ def garden_list(request):
             note = form.save(commit=False)
             note.author = request.user
             note.save()
-            return redirect("gardens:garden_list")
+            return redirect(GARDEN_LIST)
     else:
         form = GlobalNoteForm()
 
@@ -195,7 +307,7 @@ def garden_list(request):
 @require_http_methods(["GET", "POST"])
 def garden_create(request):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     if request.method == "POST":
         form = GardenForm(request.POST)
@@ -211,7 +323,7 @@ def garden_create(request):
             for pos in range(1, 13):
                 Pod.objects.create(garden=garden, position=pos)
 
-            return redirect("gardens:garden_detail", garden_id=garden.id)
+            return redirect(GARDEN_DETAIL, garden_id=garden.id)
     else:
         form = GardenForm()
 
@@ -266,7 +378,7 @@ def pod_panel(request, garden_id: int, position: int):
     pod_form = PodForm(instance=pod)
     note_form = PodNoteForm()
 
-    return render(request, "gardens/partials/pod_panel.html", {
+    return render(request, PARTIAL_POD_PANEL, {
         "garden": garden,
         "pod": pod,
         "pod_form": pod_form,
@@ -287,7 +399,7 @@ def pod_save(request, garden_id: int, position: int):
 
     pod_form = PodForm(instance=pod)
     note_form = PodNoteForm()
-    return render(request, "gardens/partials/pod_panel.html", {
+    return render(request, PARTIAL_POD_PANEL, {
         "garden": garden,
         "pod": pod,
         "pod_form": pod_form,
@@ -306,7 +418,7 @@ def pod_note_add(request, garden_id: int, position: int):
     if garden.is_guest and _guest_notes_remaining(garden) <= 0:
         pod_form = PodForm(instance=pod)
         note_form = PodNoteForm()
-        return render(request, "gardens/partials/pod_panel.html", {
+        return render(request, PARTIAL_POD_PANEL, {
             "garden": garden,
             "pod": pod,
             "pod_form": pod_form,
@@ -325,7 +437,7 @@ def pod_note_add(request, garden_id: int, position: int):
 
     pod_form = PodForm(instance=pod)
     note_form = PodNoteForm()
-    return render(request, "gardens/partials/pod_panel.html", {
+    return render(request, PARTIAL_POD_PANEL, {
         "garden": garden,
         "pod": pod,
         "pod_form": pod_form,
@@ -345,7 +457,7 @@ def garden_toggle_public(request, garden_id: int):
 
     if garden.is_guest and not GUEST_ALLOW_PUBLIC_LINK:
         messages.error(request, "Guest gardens cannot be shared publicly. Create an account to enable sharing.")
-        return redirect("gardens:garden_detail", garden_id=garden.id)
+        return redirect(GARDEN_DETAIL, garden_id=garden.id)
 
     garden.is_public = not garden.is_public
 
@@ -355,7 +467,7 @@ def garden_toggle_public(request, garden_id: int):
     # Save only the public flag (and nothing else)
     garden.save(update_fields=["is_public"])
 
-    return redirect("gardens:garden_detail", garden_id=garden.id)
+    return redirect(GARDEN_DETAIL, garden_id=garden.id)
 
 @require_http_methods(["GET"])
 def garden_public(request, share_slug: str):
@@ -369,7 +481,7 @@ def garden_public(request, share_slug: str):
 @require_http_methods(["GET"])
 def garden_export_json(request, garden_id: int):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     garden = Garden.objects.filter(id=garden_id, owner=request.user).first()
     if not garden:
@@ -384,7 +496,7 @@ def garden_export_json(request, garden_id: int):
 @require_http_methods(["GET", "POST"])
 def garden_import_json(request):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     if request.method == "GET":
         return render(request, "gardens/garden_import.html")
@@ -392,18 +504,18 @@ def garden_import_json(request):
     upload = request.FILES.get("import_file")
     if not upload:
         messages.error(request, "Please choose a JSON file to import.")
-        return redirect("gardens:garden_import_json")
+        return redirect(GARDEN_IMPORT_JSON)
 
     try:
         raw = upload.read().decode("utf-8")
         data = json.loads(raw)
     except Exception:
         messages.error(request, "That file is not valid JSON.")
-        return redirect("gardens:garden_import_json")
+        return redirect(GARDEN_IMPORT_JSON)
 
     if not isinstance(data, dict) or data.get("version") != EXPORT_VERSION:
         messages.error(request, f"Unsupported export version. Expected version={EXPORT_VERSION}.")
-        return redirect("gardens:garden_import_json")
+        return redirect(GARDEN_IMPORT_JSON)
 
     garden_name = (data.get("garden_name") or "Imported Garden").strip()[:120]
     device_type = (data.get("device_type") or "GENERIC_12").strip()
@@ -411,7 +523,7 @@ def garden_import_json(request):
     pods_data = data.get("pods") or []
     if not isinstance(pods_data, list) or len(pods_data) == 0:
         messages.error(request, "Import file has no pods.")
-        return redirect("gardens:garden_import_json")
+        return redirect(GARDEN_IMPORT_JSON)
 
     # Create the garden under the user
     garden = Garden.objects.create(
@@ -429,6 +541,12 @@ def garden_import_json(request):
     for pos in range(1, template_count + 1):
         Pod.objects.create(garden=garden, position=pos)
 
+    # Apply imported pod data
+    _apply_imported_pods(garden, pods_data)
+
+    messages.success(request, f"Imported garden: {garden.name}")
+    return redirect(GARDEN_DETAIL, garden_id=garden.id)
+
 
 # ---------------------------
 # Global Notes UI
@@ -436,7 +554,7 @@ def garden_import_json(request):
 @require_http_methods(["GET", "POST"])
 def global_notes_list_create(request):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     if request.method == "POST":
         form = GlobalNoteForm(request.POST)
@@ -444,7 +562,7 @@ def global_notes_list_create(request):
             note = form.save(commit=False)
             note.author = request.user
             note.save()
-            return redirect("gardens:global_notes")
+            return redirect(GARDEN_GLOBAL_NOTES)
     else:
         form = GlobalNoteForm()
 
@@ -455,7 +573,7 @@ def global_notes_list_create(request):
 @require_http_methods(["POST"])
 def global_note_create(request):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     form = GlobalNoteForm(request.POST)
     if form.is_valid():
@@ -466,15 +584,15 @@ def global_note_create(request):
     # If HTMX request, return the updated list fragment
     if request.headers.get("HX-Request"):
         notes = GlobalNote.objects.all().order_by("-created_at")[:50]
-        return render(request, "gardens/partials/global_notes_list.html", {"notes": notes})
+        return render(request, PARTIAL_GLOBAL_NOTES_LIST, {"notes": notes})
 
-    return redirect(request.META.get("HTTP_REFERER", "gardens:global_notes"))
+    return redirect(request.META.get("HTTP_REFERER", GARDEN_GLOBAL_NOTES))
 
 
 @require_http_methods(["POST", "DELETE"])
 def global_note_delete(request, pk: int):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     note = get_object_or_404(GlobalNote, pk=pk)
     if note.author_id != request.user.id:
@@ -483,15 +601,15 @@ def global_note_delete(request, pk: int):
     note.delete()
     if request.headers.get("HX-Request"):
         notes = GlobalNote.objects.all().order_by("-created_at")[:50]
-        return render(request, "gardens/partials/global_notes_list.html", {"notes": notes})
+        return render(request, PARTIAL_GLOBAL_NOTES_LIST, {"notes": notes})
 
-    return redirect(request.META.get("HTTP_REFERER", "gardens:global_notes"))
+    return redirect(request.META.get("HTTP_REFERER", GARDEN_GLOBAL_NOTES))
 
 
 @require_http_methods(["GET", "POST"])
 def global_note_edit(request, pk: int):
     if not request.user.is_authenticated:
-        return redirect("gardens:login")
+        return redirect(GARDENS_LOGIN)
 
     note = get_object_or_404(GlobalNote, pk=pk)
     if note.author_id != request.user.id:
@@ -503,8 +621,8 @@ def global_note_edit(request, pk: int):
             form.save()
             if request.headers.get("HX-Request"):
                 notes = GlobalNote.objects.all().order_by("-created_at")[:50]
-                return render(request, "gardens/partials/global_notes_list.html", {"notes": notes})
-            return redirect("gardens:global_notes")
+                return render(request, PARTIAL_GLOBAL_NOTES_LIST, {"notes": notes})
+            return redirect(GARDEN_GLOBAL_NOTES)
 
     else:
         form = GlobalNoteForm(instance=note)
@@ -513,52 +631,3 @@ def global_note_edit(request, pk: int):
         return render(request, "gardens/partials/global_note_form.html", {"form": form, "note": note})
 
     return render(request, "gardens/global_notes.html", {"form": form, "notes": GlobalNote.objects.all().order_by("-created_at")[:50]})
-
-    # Apply imported pod data
-    for pod_item in pods_data:
-        try:
-            pos = int(pod_item.get("position"))
-        except Exception:
-            continue
-        if pos < 1:
-            continue
-
-        pod, _created = Pod.objects.get_or_create(garden=garden, position=pos)
-
-        pod.plant_name = (pod_item.get("plant_name") or "")[:120]
-
-        planted_at = pod_item.get("planted_at")
-        pod.planted_at = None
-        if planted_at:
-            try:
-                pod.planted_at = timezone.datetime.fromisoformat(planted_at).date()
-            except Exception:
-                pod.planted_at = None
-
-        status = pod_item.get("status")
-        if status:
-            pod.status = status[:20]
-        pod.save()
-
-        notes = pod_item.get("notes") or []
-        if isinstance(notes, list):
-            for n in notes:
-                note_text = (n.get("note") or "").strip()
-                if not note_text:
-                    continue
-
-                created_at_raw = n.get("created_at")
-                created_at = timezone.now()
-                if created_at_raw:
-                    try:
-                        created_at = timezone.datetime.fromisoformat(created_at_raw)
-                        if timezone.is_naive(created_at):
-                            created_at = timezone.make_aware(created_at)
-                    except Exception:
-                        created_at = timezone.now()
-
-                note_obj = PodNote.objects.create(pod=pod, note=note_text)
-                PodNote.objects.filter(id=note_obj.id).update(created_at=created_at)
-
-    messages.success(request, f"Imported garden: {garden.name}")
-    return redirect("gardens:garden_detail", garden_id=garden.id)

@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+import logging
+from django.core.management.utils import get_random_secret_key
 from pathlib import Path
 import dj_database_url
 
@@ -22,7 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Read sensitive/overrideable settings from environment for production.
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-8(7qa@3p(&uu9fp9b90z*f87w@2m%=w9kg*nz68-k$f17#qu0y')
+# Do NOT hard-code secrets in source. Prefer environment variable `SECRET_KEY`.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    # Generate a temporary key for development/testing. In production, set SECRET_KEY env var.
+    logging.warning('SECRET_KEY not found in environment; generating a temporary key for development.')
+    SECRET_KEY = get_random_secret_key()
 
 # DEBUG should be False in production. Use environment variable to control it.
 _DEBUG_ENV = os.environ.get('DEBUG', 'True')

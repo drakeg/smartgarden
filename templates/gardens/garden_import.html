@@ -21,8 +21,8 @@
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="mb-3">
-            <label class="form-label">Export file (.json)</label>
-            <input class="form-control" type="file" name="import_file" accept="application/json,.json" required>
+            <label for="import_file" class="form-label">Export file (.json)</label>
+            <input id="import_file" class="form-control" type="file" name="import_file" accept="application/json,.json" required>
           </div>
           <button class="btn btn-success w-100">Import</button>
           <a class="btn btn-outline-secondary w-100 mt-2" href="{% url 'gardens:garden_list' %}">Cancel</a>
