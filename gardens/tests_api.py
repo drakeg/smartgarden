@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
 from .models import GlobalNote
+from .models import Garden
 
 User = get_user_model()
 
@@ -32,3 +33,40 @@ class ApiTests(APITestCase):
         self.client.credentials()
         resp = self.client.post('/api/global-notes/', {'title': 'NoAuth', 'note': 'Should fail'})
         self.assertIn(resp.status_code, (401, 403))
+
+    def test_gardens_filtering_and_search(self):
+        # create two users and gardens
+        other = User.objects.create_user(username='other', password='pass')
+        g1 = Garden.objects.create(owner=self.user, name='Alpha Garden', device_type='AHOPEGARDEN_12', is_public=True)
+        g2 = Garden.objects.create(owner=other, name='Beta Garden', device_type='AHOPEGARDEN_12', is_public=False)
+
+        # filter by owner username
+        resp = self.client.get(f'/api/gardens/?owner__username={self.user.username}')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(any(item['name'] == 'Alpha Garden' for item in data.get('results', [])))
+
+        # filter by is_public
+        resp = self.client.get('/api/gardens/?is_public=true')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(all(item['is_public'] for item in data.get('results', [])))
+
+        # search by name
+        resp = self.client.get('/api/gardens/?search=Beta')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(any('Beta' in item['name'] for item in data.get('results', [])))
+
+    def test_openapi_schema_and_docs_available(self):
+        # schema JSON
+        resp = self.client.get('/api/schema/')
+        self.assertEqual(resp.status_code, 200)
+        # Some servers return a vendor content-type; ensure schema is present and non-empty
+        self.assertTrue(resp.content and len(resp.content) > 0)
+        self.assertIn('openapi', resp.headers.get('Content-Type', '').lower())
+
+        # swagger UI
+        resp = self.client.get('/api/docs/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Swagger', resp.content.decode('utf-8') or '')
