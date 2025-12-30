@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Garden, Pod, PodNote
+from .models import Garden, Pod, PodNote, GlobalNote
 
 class PodInline(admin.TabularInline):
     model = Pod
@@ -22,4 +22,10 @@ class PodAdmin(admin.ModelAdmin):
 class PodNoteAdmin(admin.ModelAdmin):
     list_display = ("pod", "created_at")
     search_fields = ("pod__plant_name", "note")
+
+
+@admin.register(GlobalNote)
+class GlobalNoteAdmin(admin.ModelAdmin):
+    list_display = ("title", "author", "created_at")
+    search_fields = ("title", "note", "author__username")
 

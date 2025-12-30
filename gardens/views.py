@@ -13,6 +13,8 @@ from django.views.decorators.http import require_http_methods
 from .device_templates import get_device_template, try_load_svg_and_map
 from .forms import GardenForm, PodForm, PodNoteForm
 from .models import Garden, Pod, PodNote
+from .models import GlobalNote
+from .forms import GlobalNoteForm
 
 EXPORT_VERSION = 1
 
@@ -397,6 +399,28 @@ def garden_import_json(request):
     # Create baseline pods 1..template_count
     for pos in range(1, template_count + 1):
         Pod.objects.create(garden=garden, position=pos)
+
+
+# ---------------------------
+# Global Notes UI
+# ---------------------------
+@require_http_methods(["GET", "POST"])
+def global_notes_list_create(request):
+    if not request.user.is_authenticated:
+        return redirect("gardens:login")
+
+    if request.method == "POST":
+        form = GlobalNoteForm(request.POST)
+        if form.is_valid():
+            note = form.save(commit=False)
+            note.author = request.user
+            note.save()
+            return redirect("gardens:global_notes")
+    else:
+        form = GlobalNoteForm()
+
+    notes = GlobalNote.objects.all().order_by("-created_at")[:50]
+    return render(request, "gardens/global_notes.html", {"notes": notes, "form": form})
 
     # Apply imported pod data
     for pod_item in pods_data:

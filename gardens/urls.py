@@ -1,5 +1,6 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
+from . import api_urls
 
 app_name = "gardens"
 
@@ -28,6 +29,12 @@ urlpatterns = [
     # (flip view removed) 
     # guest mode
     path("try/", views.guest_start, name="guest_start"),
+
+    # Global notes UI
+    path("notes/", views.global_notes_list_create, name="global_notes"),
+
+    # API
+    path("api/", include(api_urls)),
 
 ]
 

@@ -95,3 +95,28 @@ class PodNote(models.Model):
     def __str__(self) -> str:
         return f"Note for {self.pod} @ {self.created_at}"
 
+
+class GlobalNote(models.Model):
+    """Notes that apply across the whole site (not tied to a single pod or garden).
+
+    Examples: tips about a plant variety, problematic locations, or general reminders.
+    """
+    created_at = models.DateTimeField(auto_now_add=True)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="global_notes",
+    )
+    title = models.CharField(max_length=200, blank=True)
+    note = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        if self.title:
+            return f"{self.title} (@{self.created_at.date()})"
+        return f"Global note @ {self.created_at}"
+

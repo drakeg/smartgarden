@@ -1,0 +1,31 @@
+{% extends 'gardens/base.html' %}
+
+{% block content %}
+<h1>Global Notes</h1>
+
+<form method="post">
+  {% csrf_token %}
+  <div>
+    {{ form.title.label_tag }}<br>
+    {{ form.title }}
+  </div>
+  <div>
+    {{ form.note.label_tag }}<br>
+    {{ form.note }}
+  </div>
+  <p><button type="submit">Add Note</button></p>
+</form>
+
+<hr>
+<ul>
+  {% for n in notes %}
+    <li>
+      <strong>{{ n.title }}</strong> by {{ n.author.username }} on {{ n.created_at|date:"Y-m-d H:i" }}<br>
+      <div>{{ n.note|linebreaks }}</div>
+    </li>
+  {% empty %}
+    <li>No notes yet.</li>
+  {% endfor %}
+</ul>
+
+{% endblock %}

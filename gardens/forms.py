@@ -1,5 +1,6 @@
 from django import forms
 from .models import Garden, Pod, PodNote
+from .models import GlobalNote
 
 class GardenForm(forms.ModelForm):
     class Meta:
@@ -20,5 +21,14 @@ class PodNoteForm(forms.ModelForm):
         fields = ["note", "photo"]
         widgets = {
             "note": forms.Textarea(attrs={"rows": 3}),
+        }
+
+
+class GlobalNoteForm(forms.ModelForm):
+    class Meta:
+        model = GlobalNote
+        fields = ["title", "note"]
+        widgets = {
+            "note": forms.Textarea(attrs={"rows": 4}),
         }
 

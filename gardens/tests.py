@@ -2,6 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from .models import GlobalNote
 
 
 User = get_user_model()
@@ -48,3 +49,10 @@ class BasicAppTests(TestCase):
 		self.assertIn('Pod 1', content)
 		self.assertIn('Pod 2', content)
 		self.assertIn('Pod 3', content)
+
+	def test_global_note_model(self):
+		"""Ensure a GlobalNote can be created and queried."""
+		user = User.objects.create_user(username='notes', password='pass')
+		note = user.global_notes.create(title='Test tip', note='This plant fails in shade')
+		self.assertIn('Test tip', str(note))
+		self.assertEqual(GlobalNote.objects.count(), 1)
