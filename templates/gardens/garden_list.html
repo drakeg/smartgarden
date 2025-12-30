@@ -7,6 +7,26 @@
   <a class="btn btn-outline-primary" href="{% url 'gardens:garden_import_json' %}">Import</a>
 </div>
 
+{% if user.is_authenticated %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Add a Global Note</h5>
+      <form method="post" action="{% url 'gardens:global_note_create' %}" hx-post="{% url 'gardens:global_note_create' %}" hx-target="#global-notes-list" hx-swap="outerHTML">
+        {% csrf_token %}
+        <div class="mb-2">{{ form.title.label_tag }} {{ form.title }}</div>
+        <div class="mb-2">{{ form.note.label_tag }} {{ form.note }}</div>
+        <button class="btn btn-sm btn-primary" type="submit">Add Note</button>
+        <a class="btn btn-sm btn-link" href="{% url 'gardens:global_notes' %}">Manage all notes</a>
+      </form>
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <h5>Recent Global Notes</h5>
+    {% include 'gardens/partials/global_notes_list.html' %}
+  </div>
+{% endif %}
+
 <div class="row g-3">
   {% for g in gardens %}
     <div class="col-md-6">

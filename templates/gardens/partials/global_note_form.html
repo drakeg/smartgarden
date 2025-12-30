@@ -1,0 +1,8 @@
+<div id="global-note-form">
+  <form method="post" action="" hx-post="{{ request.path }}" hx-target="#global-notes-list" hx-swap="outerHTML">
+    {% csrf_token %}
+    <div>{{ form.title.label_tag }} {{ form.title }}</div>
+    <div>{{ form.note.label_tag }} {{ form.note }}</div>
+    <div><button class="btn btn-sm btn-primary" type="submit">Save</button></div>
+  </form>
+</div>

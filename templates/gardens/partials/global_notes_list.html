@@ -1,0 +1,20 @@
+<div id="global-notes-list">
+  <ul>
+    {% for n in notes %}
+      <li>
+        <strong>{{ n.title }}</strong> — {{ n.note|linebreaksbr }}<br>
+        <small>by {% if n.author %}{{ n.author.username }}{% else %}Anonymous{% endif %} on {{ n.created_at|date:"Y-m-d" }}</small>
+        {% if user.is_authenticated and n.author and n.author.id == user.id %}
+          <form method="post" action="{% url 'gardens:global_note_delete' n.id %}" style="display:inline;" hx-post="{% url 'gardens:global_note_delete' n.id %}" hx-include="this" hx-swap="outerHTML" hx-confirm="Delete note?">
+            {% csrf_token %}
+            <button class="btn btn-link btn-sm text-danger">Delete</button>
+          </form>
+          <a class="btn btn-link btn-sm" hx-get="{% url 'gardens:global_note_edit' n.id %}" hx-target="#global-note-edit-{{ n.id }}">Edit</a>
+          <div id="global-note-edit-{{ n.id }}"></div>
+        {% endif %}
+      </li>
+    {% empty %}
+      <li>No notes yet.</li>
+    {% endfor %}
+  </ul>
+</div>

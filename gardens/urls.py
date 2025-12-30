@@ -31,7 +31,10 @@ urlpatterns = [
     path("try/", views.guest_start, name="guest_start"),
 
     # Global notes UI
-    path("notes/", views.global_notes_list_create, name="global_notes"),
+    path("gardens/notes/", views.global_notes_list_create, name="global_notes"),
+    path("gardens/notes/create/", views.global_note_create, name="global_note_create"),
+    path("gardens/notes/<int:pk>/delete/", views.global_note_delete, name="global_note_delete"),
+    path("gardens/notes/<int:pk>/edit/", views.global_note_edit, name="global_note_edit"),
 
     # API
     path("api/", include(api_urls)),

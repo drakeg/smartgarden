@@ -13,7 +13,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 
 ## Prerequisites
 - macOS / Linux / Windows with a POSIX-like shell
-- Python 3.10+ (or the version your project uses)
+- Python 3.12+ (required for Django 6+ used in this project)
 - Git (optional)
 - A virtual environment (recommended)
 
@@ -165,6 +165,63 @@ python manage.py test
 - The garden detail page shows `FRONT` and `BACK` overlays on the left/right edges to indicate orientation; the flip-view control and the orientation card have been removed for a cleaner interface.
 - CSS for the garden detail page lives in `static/gardens/css/garden_detail.css`.
 
+## Global Notes (site-wide)
+
+This project includes a simple site-wide notes feature (`GlobalNote`) that allows authenticated users to create short notes visible across the site. Notes can be managed from the `/gardens/notes/` UI and via the JSON API.
+
+- UI: Manage notes at `/gardens/notes/`. The list and create/edit/delete flows support HTMX for inline updates without a full-page reload.
+- HTMX examples:
+
+	- Inline create (in templates):
+
+		<form hx-post="/gardens/notes/create/" hx-target="#global-notes-list" hx-swap="innerHTML">
+			<input name="title" placeholder="Title">
+			<textarea name="note" placeholder="Note"></textarea>
+			<button>Save</button>
+		</form>
+
+	- HTMX fetch of edit form:
+
+		<button hx-get="/gardens/notes/123/edit/" hx-target="#global-note-123" hx-swap="innerHTML">Edit</button>
+
+	- If you need to simulate an HTMX request from a quick script or test, send the `HX-Request: true` header with your POST/GET.
+
+		Example using `curl` to create a note (requires auth/cookies/session):
+
+		```bash
+		curl -X POST \
+			-H "HX-Request: true" \
+			-F "title=Tip" -F "note=Plant in sun" \
+			http://localhost:8000/gardens/notes/create/
+		```
+
+## API
+
+This project exposes a JSON API (via Django REST Framework). The API root is mounted at `/api/`.
+
+- Obtain an auth token (DRF token auth):
+
+	POST credentials to `/api-token-auth/` (username + password) to receive a token.
+
+- Global notes endpoints:
+
+	- `GET /api/global-notes/` — list notes
+	- `POST /api/global-notes/` — create note (requires token or session auth)
+	- `GET /api/global-notes/{id}/` — retrieve a note
+	- `PUT/PATCH /api/global-notes/{id}/` — update note (author only)
+	- `DELETE /api/global-notes/{id}/` — delete note (author only)
+
+Example using `curl` with token auth:
+
+```bash
+# obtain token (one-time)
+curl -X POST -d "username=alice&password=secret" http://localhost:8000/api-token-auth/
+# then use the token
+curl -H "Authorization: Token <your-token>" http://localhost:8000/api/global-notes/
+```
+
+The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`.
+
 ## Contributing
 - Create a branch for your change, keep commits focused, and open a PR when ready.
 - Run tests and ensure `collectstatic` is used if you change static assets.
@@ -174,3 +231,27 @@ python manage.py test
 - "Django not found": activate the virtualenv used by the project (`source ../.venv/bin/activate`).
 
 If you need a tailored setup (Docker, CI, or deployment guidance), open an issue or ask for specific instructions.
+
+## Admin (local development)
+
+The Django admin is available at `/admin/`. For local development you can create a superuser with:
+
+```bash
+python manage.py createsuperuser
+# follow the prompts to set username/email/password
+```
+
+If you prefer a quick test admin account for local-only testing, create one and use it only in non-production environments. Do NOT reuse these credentials on any public or production server.
+
+Example (for local testing only):
+
+- Username: `admin`
+- Password: `adminpass`
+
+To add an example screenshot to the repo, place image files under `docs/screenshots/` and reference them in the README. Example markdown for an admin screenshot:
+
+```
+![Admin dashboard](docs/screenshots/admin_dashboard.png)
+```
+
+You can capture and commit small, low-resolution screenshots for documentation, but avoid committing sensitive data or real user information.

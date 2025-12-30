@@ -9,8 +9,31 @@
         <p class="muted mb-3">
           Click pods, label plants, track planted dates, and keep notes — without trying to read tiny pod stickers.
         </p>
-        <a class="btn btn-primary" href="{% url 'gardens:login' %}">Log in</a>
-        <a class="btn btn-outline-success ms-2" href="{% url 'gardens:guest_start' %}">Try it now (Guest)</a>
+        {% if user.is_authenticated %}
+          <p>
+            <a class="btn btn-primary" href="{% url 'gardens:garden_list' %}">Your Gardens</a>
+            <a class="btn btn-outline-secondary ms-2" href="{% url 'gardens:global_notes' %}">All Notes</a>
+          </p>
+
+          <h3>Your Global Notes</h3>
+          <form method="post" action="{% url 'gardens:global_note_create' %}" hx-post="{% url 'gardens:global_note_create' %}" hx-target="#global-notes-list" hx-swap="outerHTML">
+            {% csrf_token %}
+            <div>
+              {{ form.title.label_tag }}<br>
+              {{ form.title }}
+            </div>
+            <div>
+              {{ form.note.label_tag }}<br>
+              {{ form.note }}
+            </div>
+            <p><button type="submit" class="btn btn-sm btn-success">Add Note</button></p>
+          </form>
+
+          {% include 'gardens/partials/global_notes_list.html' %}
+        {% else %}
+          <a class="btn btn-primary" href="{% url 'gardens:login' %}">Log in</a>
+          <a class="btn btn-outline-success ms-2" href="{% url 'gardens:guest_start' %}">Try it now (Guest)</a>
+        {% endif %}
       </div>
     </div>
   </div>

@@ -90,9 +90,26 @@ def _garden_to_export_dict(garden: Garden) -> dict:
 # ---------------------------
 # Auth + Home
 # ---------------------------
+@require_http_methods(["GET", "POST"])
 def home(request):
+    # If user is authenticated, show their gardens and a global notes area on the homepage.
     if request.user.is_authenticated:
-        return redirect("gardens:garden_list")
+        # Handle new global note submission from home page
+        if request.method == "POST":
+            form = GlobalNoteForm(request.POST)
+            if form.is_valid():
+                note = form.save(commit=False)
+                note.author = request.user
+                note.save()
+                return redirect("gardens:home")
+        else:
+            form = GlobalNoteForm()
+
+        gardens = Garden.objects.filter(owner=request.user).order_by("-created_at")
+        notes = GlobalNote.objects.all().order_by("-created_at")[:50]
+        return render(request, "gardens/home.html", {"gardens": gardens, "notes": notes, "form": form})
+
+    # Unauthenticated visitors: marketing / guest CTA
     return render(request, "gardens/home.html")
 
 def login_view(request):
@@ -155,13 +172,25 @@ def guest_start(request):
 # ---------------------------
 # Gardens (Account-only list/create)
 # ---------------------------
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def garden_list(request):
     if not request.user.is_authenticated:
         return redirect("gardens:home")
 
+    # Allow creating a GlobalNote from the gardens list page
+    if request.method == "POST":
+        form = GlobalNoteForm(request.POST)
+        if form.is_valid():
+            note = form.save(commit=False)
+            note.author = request.user
+            note.save()
+            return redirect("gardens:garden_list")
+    else:
+        form = GlobalNoteForm()
+
     gardens = Garden.objects.filter(owner=request.user).order_by("-created_at")
-    return render(request, "gardens/garden_list.html", {"gardens": gardens})
+    notes = GlobalNote.objects.all().order_by("-created_at")[:50]
+    return render(request, "gardens/garden_list.html", {"gardens": gardens, "notes": notes, "form": form})
 
 @require_http_methods(["GET", "POST"])
 def garden_create(request):
@@ -421,6 +450,69 @@ def global_notes_list_create(request):
 
     notes = GlobalNote.objects.all().order_by("-created_at")[:50]
     return render(request, "gardens/global_notes.html", {"notes": notes, "form": form})
+
+
+@require_http_methods(["POST"])
+def global_note_create(request):
+    if not request.user.is_authenticated:
+        return redirect("gardens:login")
+
+    form = GlobalNoteForm(request.POST)
+    if form.is_valid():
+        note = form.save(commit=False)
+        note.author = request.user
+        note.save()
+
+    # If HTMX request, return the updated list fragment
+    if request.headers.get("HX-Request"):
+        notes = GlobalNote.objects.all().order_by("-created_at")[:50]
+        return render(request, "gardens/partials/global_notes_list.html", {"notes": notes})
+
+    return redirect(request.META.get("HTTP_REFERER", "gardens:global_notes"))
+
+
+@require_http_methods(["POST", "DELETE"])
+def global_note_delete(request, pk: int):
+    if not request.user.is_authenticated:
+        return redirect("gardens:login")
+
+    note = get_object_or_404(GlobalNote, pk=pk)
+    if note.author_id != request.user.id:
+        return Http404("Not allowed")
+
+    note.delete()
+    if request.headers.get("HX-Request"):
+        notes = GlobalNote.objects.all().order_by("-created_at")[:50]
+        return render(request, "gardens/partials/global_notes_list.html", {"notes": notes})
+
+    return redirect(request.META.get("HTTP_REFERER", "gardens:global_notes"))
+
+
+@require_http_methods(["GET", "POST"])
+def global_note_edit(request, pk: int):
+    if not request.user.is_authenticated:
+        return redirect("gardens:login")
+
+    note = get_object_or_404(GlobalNote, pk=pk)
+    if note.author_id != request.user.id:
+        return Http404("Not allowed")
+
+    if request.method == "POST":
+        form = GlobalNoteForm(request.POST, instance=note)
+        if form.is_valid():
+            form.save()
+            if request.headers.get("HX-Request"):
+                notes = GlobalNote.objects.all().order_by("-created_at")[:50]
+                return render(request, "gardens/partials/global_notes_list.html", {"notes": notes})
+            return redirect("gardens:global_notes")
+
+    else:
+        form = GlobalNoteForm(instance=note)
+
+    if request.headers.get("HX-Request"):
+        return render(request, "gardens/partials/global_note_form.html", {"form": form, "note": note})
+
+    return render(request, "gardens/global_notes.html", {"form": form, "notes": GlobalNote.objects.all().order_by("-created_at")[:50]})
 
     # Apply imported pod data
     for pod_item in pods_data:
