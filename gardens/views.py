@@ -4,8 +4,12 @@ import json
 import secrets
 
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, get_user_model
+from .forms import RegistrationForm
 from django.http import JsonResponse, Http404
+from django.urls import reverse
+from django.conf import settings
+from django.core import signing, mail
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
@@ -106,8 +110,8 @@ def _parse_import_upload(upload) -> dict:
     try:
         raw = upload.read().decode("utf-8")
         return json.loads(raw)
-    except Exception:
-        raise ValueError("That file is not valid JSON.")
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("That file is not valid JSON.") from exc
 
 
 def _validate_import_data(data: dict) -> tuple[str, str, list]:
@@ -140,7 +144,7 @@ def _create_garden_from_import(user, garden_name: str, device_type: str) -> tupl
 def _get_pod_position(item: dict) -> int | None:
     try:
         pos = int(item.get("position"))
-    except Exception:
+    except (TypeError, ValueError):
         return None
     if pos < 1:
         return None
@@ -162,7 +166,7 @@ def _apply_notes_to_pod(pod: Pod, notes: list) -> None:
                 created_at = timezone.datetime.fromisoformat(created_at_raw)
                 if timezone.is_naive(created_at):
                     created_at = timezone.make_aware(created_at)
-            except Exception:
+            except (ValueError, TypeError):
                 created_at = timezone.now()
 
         note_obj = PodNote.objects.create(pod=pod, note=note_text)
@@ -183,7 +187,7 @@ def _apply_single_pod(garden_obj: Garden, item: dict) -> None:
     if planted_at:
         try:
             pod.planted_at = timezone.datetime.fromisoformat(planted_at).date()
-        except Exception:
+        except (ValueError, TypeError):
             pod.planted_at = None
 
     status = item.get("status")
@@ -234,6 +238,71 @@ def login_view(request):
             return redirect(GARDEN_LIST)
         return render(request, "gardens/login.html", {"error": "Invalid username or password."})
     return render(request, "gardens/login.html")
+
+
+def register_view(request):
+    if request.method == "POST":
+        form = RegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.email = form.cleaned_data.get("email")
+
+            # If outgoing email backend is configured (not the console backend), require confirmation
+            email_backend = getattr(settings, 'EMAIL_BACKEND', '') or ''
+            using_console = email_backend.startswith('django.core.mail.backends.console') or email_backend == ''
+
+            if not using_console:
+                # create inactive user and send confirmation
+                user.is_active = False
+                user.save()
+                token = signing.dumps({'user_id': user.pk}, salt='email-confirm')
+                confirm_url = request.build_absolute_uri(
+                    reverse('gardens:confirm_registration', args=[token])
+                )
+                subject = 'Confirm your Smart Garden account'
+                message = f'Hi {user.username},\n\nPlease confirm your account by visiting: {confirm_url}\n\nIf you did not sign up, ignore this message.'
+                mail.send_mail(subject, message, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [user.email])
+                return render(request, 'gardens/confirm_sent.html', {'email': user.email})
+            else:
+                # No email configured: activate immediately and log in
+                user.is_active = True
+                user.save()
+                messages.success(request, "Welcome to Smart Garden — your account is ready.")
+                login(request, user)
+                return redirect(GARDEN_LIST)
+    else:
+        form = RegistrationForm()
+
+    return render(request, "gardens/register.html", {"form": form})
+
+
+@require_http_methods(["GET"])
+def confirm_registration(request, token: str):
+    try:
+        data = signing.loads(token, salt='email-confirm', max_age=60 * 60 * 24)
+        user_id = data.get('user_id')
+        user_model = get_user_model()
+        user = user_model.objects.filter(pk=user_id).first()
+        if not user:
+            raise Http404('User not found')
+        user.is_active = True
+        user.save()
+        # send welcome email if possible
+        email_backend = getattr(settings, 'EMAIL_BACKEND', '') or ''
+        using_console = email_backend.startswith('django.core.mail.backends.console') or email_backend == ''
+        if not using_console and user.email:
+            subject = 'Welcome to Smart Garden'
+            message = f'Hi {user.username},\n\nYour account is confirmed — welcome!'
+            mail.send_mail(subject, message, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [user.email])
+
+        login(request, user)
+        return render(request, 'gardens/confirm_success.html', {'user': user})
+    except signing.SignatureExpired:
+        messages.error(request, 'Confirmation link has expired. Please register again.')
+        return redirect('gardens:register')
+    except signing.BadSignature:
+        messages.error(request, 'Invalid confirmation link.')
+        return redirect('gardens:register')
 
 def logout_view(request):
     logout(request)
@@ -509,7 +578,7 @@ def garden_import_json(request):
     try:
         raw = upload.read().decode("utf-8")
         data = json.loads(raw)
-    except Exception:
+    except (UnicodeDecodeError, json.JSONDecodeError):
         messages.error(request, "That file is not valid JSON.")
         return redirect(GARDEN_IMPORT_JSON)
 

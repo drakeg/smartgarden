@@ -1,0 +1,63 @@
+{% extends "gardens/base.html" %}
+{% block title %}Register - Smart Garden{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card shadow-sm rounded-4">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-3">Create an account</h1>
+        {% if messages %}
+          {% for m in messages %}
+            <div class="alert alert-{{ m.tags }}">{{ m }}</div>
+          {% endfor %}
+        {% endif %}
+
+        <form method="post" class="needs-validation" novalidate>
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <div class="mb-3">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+            {% if form.username.errors %}
+              <div class="text-danger small">{{ form.username.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.email.label_tag }}
+            {{ form.email }}
+            {% if form.email.errors %}
+              <div class="text-danger small">{{ form.email.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.password1.label_tag }}
+            {{ form.password1 }}
+            {% if form.password1.errors %}
+              <div class="text-danger small">{{ form.password1.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.password2.label_tag }}
+            {{ form.password2 }}
+            {% if form.password2.errors %}
+              <div class="text-danger small">{{ form.password2.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-grid mb-2">
+            <button class="btn btn-primary">Register</button>
+          </div>
+
+          <div class="text-center text-muted small">Already have an account? <a href="{% url 'gardens:login' %}">Sign in</a></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

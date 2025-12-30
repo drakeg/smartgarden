@@ -5,20 +5,33 @@
   <div class="col-md-5">
     <div class="card shadow-sm rounded-4">
       <div class="card-body p-4">
-        <h1 class="h5 mb-3">Login</h1>
+        <h1 class="h4 mb-3">Sign in</h1>
+        {% if messages %}
+          {% for m in messages %}
+            <div class="alert alert-{{ m.tags }}">{{ m }}</div>
+          {% endfor %}
+        {% endif %}
         {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
-        <form method="post">
+
+        <form method="post" class="needs-validation" novalidate>
           {% csrf_token %}
           <div class="mb-3">
             <label for="username" class="form-label">Username</label>
-            <input id="username" class="form-control" name="username" required>
+            <input id="username" class="form-control" name="username" placeholder="your username" required aria-required="true">
+            <div class="invalid-feedback">Please enter your username.</div>
           </div>
+
           <div class="mb-3">
             <label for="password" class="form-label">Password</label>
-            <input id="password" class="form-control" type="password" name="password" required>
+            <input id="password" class="form-control" type="password" name="password" placeholder="your password" required aria-required="true">
+            <div class="invalid-feedback">Please enter your password.</div>
           </div>
-          <button class="btn btn-primary w-100">Sign in</button>
-          <p class="muted mt-3 mb-0">Create users in the Django admin for now (MVP).</p>
+
+          <div class="d-grid mb-2">
+            <button class="btn btn-primary">Sign in</button>
+          </div>
+
+          <div class="text-center text-muted small">Don't have an account? <a href="{% url 'gardens:register' %}">Register</a></div>
         </form>
       </div>
     </div>

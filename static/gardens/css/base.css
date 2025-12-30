@@ -47,3 +47,25 @@
     }
 
     .muted { color: #6c757d; }
+
+/* Hero tweaks */
+.hero-illustration { width: 100%; height: auto; max-height: 140px; display:block; margin-bottom: 8px; }
+.display-6 { font-weight: 600; }
+.lead { font-size: 1.05rem; }
+
+/* Global notes cards */
+.card.h-100 { border: none; border-radius: 12px; }
+.card-body { padding: 1rem; }
+.card-title { font-size: 1rem; font-weight: 600; }
+
+/* Buttons spacing */
+.btn-lg { padding: .75rem 1.25rem; }
+
+/* Sidepanel tweaks */
+.sidepanel { box-shadow: 0 6px 18px rgba(18, 38, 63, 0.06); }
+
+/* Small responsive adjustments */
+@media (max-width: 767px) {
+  .pod-grid { gap: 10px; }
+  .hero-illustration { max-height: 110px; }
+}

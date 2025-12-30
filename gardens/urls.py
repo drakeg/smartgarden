@@ -7,6 +7,8 @@ app_name = "gardens"
 urlpatterns = [
     path("", views.home, name="home"),
     path("accounts/login/", views.login_view, name="login"),
+    path("accounts/register/", views.register_view, name="register"),
+    path("accounts/confirm/<str:token>/", views.confirm_registration, name="confirm_registration"),
     path("accounts/logout/", views.logout_view, name="logout"),
 
     path("gardens/", views.garden_list, name="garden_list"),

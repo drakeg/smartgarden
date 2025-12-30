@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from .models import GlobalNote
 
 
-User = get_user_model()
+user_model = get_user_model()
 
 
 class BasicAppTests(TestCase):
@@ -31,7 +31,7 @@ class BasicAppTests(TestCase):
 	def test_garden_detail_renders_for_owner(self):
 		"""Create a garden with pods and ensure the detail view renders for the owner."""
 		# create user and garden
-		user = User.objects.create_user(username='tester', password='pass')
+		user = user_model.objects.create_user(username='tester', password='pass')
 		garden = user.gardens.create(name='My Test Garden')
 
 		# create a few pods
@@ -52,7 +52,7 @@ class BasicAppTests(TestCase):
 
 	def test_global_note_model(self):
 		"""Ensure a GlobalNote can be created and queried."""
-		user = User.objects.create_user(username='notes', password='pass')
+		user = user_model.objects.create_user(username='notes', password='pass')
 		note = user.global_notes.create(title='Test tip', note='This plant fails in shade')
 		self.assertIn('Test tip', str(note))
 		self.assertEqual(GlobalNote.objects.count(), 1)

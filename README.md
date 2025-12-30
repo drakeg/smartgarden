@@ -161,6 +161,39 @@ Run Django tests with:
 python manage.py test
 ```
 
+## Registration & Account Activation
+
+- This project supports user registration. Behavior depends on your `EMAIL_BACKEND` configuration:
+	- Development / console backend (or when `EMAIL_BACKEND` is unset): new accounts are activated immediately and the user is logged in. This keeps onboarding friction low during development.
+	- Real SMTP / transactional backends: registrations are created inactive and a confirmation email is sent with a time-limited token. The user must click the confirmation link to activate the account.
+
+- Ensure you configure `DEFAULT_FROM_EMAIL` when sending real emails. Example (env):
+
+```
+DEFAULT_FROM_EMAIL=admin@yourdomain.com
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.sendgrid.net
+EMAIL_HOST_USER=apikey
+EMAIL_HOST_PASSWORD=<your_api_key>
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+```
+
+## SECRET_KEY and Production
+
+- This project reads `SECRET_KEY` from the environment in production. If no `SECRET_KEY` is found during development, the app will generate a temporary key and emit a warning — do not use that generated key in production.
+
+- To generate a secure key locally you can run:
+
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+- In production, set `SECRET_KEY` as an environment variable and rotate it only when you must (rotating will invalidate existing sessions).
+
+Add these env vars to your deployment configuration or Docker `.env` file and keep them secret.
+
+
 ## Notes / Recent UI changes
 - The garden detail page shows `FRONT` and `BACK` overlays on the left/right edges to indicate orientation; the flip-view control and the orientation card have been removed for a cleaner interface.
 - CSS for the garden detail page lives in `static/gardens/css/garden_detail.css`.

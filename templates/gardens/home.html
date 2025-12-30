@@ -1,39 +1,66 @@
 {% extends "gardens/base.html" %}
+{% load static %}
 {% block title %}Smart Garden{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
     <div class="card shadow-sm rounded-4">
       <div class="card-body p-4">
-        <h1 class="h4">Track your countertop garden by pod position</h1>
-        <p class="muted mb-3">
-          Click pods, label plants, track planted dates, and keep notes — without trying to read tiny pod stickers.
-        </p>
+        <div class="row">
+          <div class="col-md-7">
+              <div class="p-4 bg-white rounded-3 shadow-sm">
+                <div class="d-flex align-items-center gap-3">
+                  <div style="flex:0 0 120px;">
+                    <img src="{% static 'gardens/img/hero.svg' %}" class="hero-illustration" alt="Illustration of a countertop garden">
+                  </div>
+                  <div>
+                    <h1 class="display-6">Bring your countertop garden to life</h1>
+                    <p class="lead text-muted">Label plants, track planted dates, and keep rich notes — simple, fast, and neatly organized.</p>
+                  </div>
+                </div>
+              <p class="mt-3">
+                {% if user.is_authenticated %}
+                  <a class="btn btn-primary btn-lg me-2" href="{% url 'gardens:garden_list' %}">Your Gardens</a>
+                  <a class="btn btn-outline-secondary btn-lg" href="{% url 'gardens:global_notes' %}">All Notes</a>
+                {% endif %}
+              </p>
+            </div>
+          </div>
+
+          <div class="col-md-5">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title">Quick Note</h5>
+                {% if user.is_authenticated %}
+                  <form method="post" action="{% url 'gardens:global_note_create' %}" hx-post="{% url 'gardens:global_note_create' %}" hx-target="#global-notes-list" hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <div class="mb-2">
+                      {{ form.title.label_tag }}
+                      {{ form.title }}
+                    </div>
+                    <div class="mb-2">
+                      {{ form.note.label_tag }}
+                      {{ form.note }}
+                    </div>
+                    <div class="d-grid">
+                      <button type="submit" class="btn btn-success">Add Note</button>
+                    </div>
+                  </form>
+                {% else %}
+                  <p class="mb-0">Log in to create notes and manage gardens.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {% if user.is_authenticated %}
-          <p>
-            <a class="btn btn-primary" href="{% url 'gardens:garden_list' %}">Your Gardens</a>
-            <a class="btn btn-outline-secondary ms-2" href="{% url 'gardens:global_notes' %}">All Notes</a>
-          </p>
-
-          <h3>Your Global Notes</h3>
-          <form method="post" action="{% url 'gardens:global_note_create' %}" hx-post="{% url 'gardens:global_note_create' %}" hx-target="#global-notes-list" hx-swap="outerHTML">
-            {% csrf_token %}
-            <div>
-              {{ form.title.label_tag }}<br>
-              {{ form.title }}
-            </div>
-            <div>
-              {{ form.note.label_tag }}<br>
-              {{ form.note }}
-            </div>
-            <p><button type="submit" class="btn btn-sm btn-success">Add Note</button></p>
-          </form>
-
+        <div class="mt-4">
+          <h3 class="mb-3">Recent Notes</h3>
           {% include 'gardens/partials/global_notes_list.html' %}
-        {% else %}
-          <a class="btn btn-primary" href="{% url 'gardens:login' %}">Log in</a>
-          <a class="btn btn-outline-success ms-2" href="{% url 'gardens:guest_start' %}">Try it now (Guest)</a>
+        </div>
         {% endif %}
+        
       </div>
     </div>
   </div>

@@ -4,13 +4,13 @@ from django.test import TestCase, Client
 
 from .models import GlobalNote
 
-User = get_user_model()
+user_model = get_user_model()
 
 
 class HtmxNotesTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username='htmx', password='pass')
+        self.user = user_model.objects.create_user(username='htmx', password='pass')
 
     def test_htmx_create_note(self):
         self.client.force_login(self.user)

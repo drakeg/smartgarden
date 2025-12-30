@@ -1,0 +1,15 @@
+{% extends "gardens/base.html" %}
+{% block title %}Account Confirmed{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h3>Account confirmed</h3>
+        <p>Welcome, <strong>{{ user.username }}</strong>! Your account is now active.</p>
+        <a class="btn btn-primary" href="{% url 'gardens:garden_list' %}">Go to your gardens</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -4,12 +4,12 @@ from rest_framework import serializers
 from .models import Garden, Pod, PodNote, GlobalNote
 
 
-User = get_user_model()
+user_model = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
+        model = user_model
         fields = ("id", "username", "email")
 
 

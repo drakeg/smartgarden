@@ -6,13 +6,13 @@ from rest_framework.authtoken.models import Token
 from .models import GlobalNote
 from .models import Garden
 
-User = get_user_model()
+user_model = get_user_model()
 
 
 class ApiTests(APITestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username='apiuser', password='pass')
+        self.user = user_model.objects.create_user(username='apiuser', password='pass')
         self.token, _ = Token.objects.get_or_create(user=self.user)
 
     def test_obtain_token_and_create_global_note(self):
@@ -36,7 +36,7 @@ class ApiTests(APITestCase):
 
     def test_gardens_filtering_and_search(self):
         # create two users and gardens
-        other = User.objects.create_user(username='other', password='pass')
+        other = user_model.objects.create_user(username='other', password='pass')
         Garden.objects.create(owner=self.user, name='Alpha Garden', device_type='AHOPEGARDEN_12', is_public=True)
         Garden.objects.create(owner=other, name='Beta Garden', device_type='AHOPEGARDEN_12', is_public=False)
 

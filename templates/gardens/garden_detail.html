@@ -29,14 +29,18 @@
       Export JSON
     </a>
     
-    <form method="post" action="{% url 'gardens:garden_toggle_public' garden.id %}">
-      {% csrf_token %}
-      {% if garden.is_public %}
-        <button class="btn btn-outline-danger btn-sm">Disable Public Link</button>
-      {% else %}
-        <button class="btn btn-outline-success btn-sm">Enable Public Link</button>
-      {% endif %}
-    </form>
+    {% if is_guest %}
+      <button class="btn btn-sm btn-outline-secondary disabled" aria-disabled="true" title="Guests cannot change the public link">Guest — public link disabled</button>
+    {% else %}
+      <form method="post" action="{% url 'gardens:garden_toggle_public' garden.id %}">
+        {% csrf_token %}
+        {% if garden.is_public %}
+          <button class="btn btn-outline-danger btn-sm">Disable Public Link</button>
+        {% else %}
+          <button class="btn btn-outline-success btn-sm">Enable Public Link</button>
+        {% endif %}
+      </form>
+    {% endif %}
   </div>
 </div>
 

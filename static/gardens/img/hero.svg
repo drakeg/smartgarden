@@ -1,0 +1,8 @@
+<svg class="hero-illustration" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="heroTitle">
+  <title id="heroTitle">Countertop garden illustration</title>
+  <g fill="none" fill-rule="evenodd">
+    <circle cx="32" cy="32" r="30" fill="#e9f7ef" />
+    <path d="M20 40c4-6 10-6 14-2s4 8 4 8" stroke="#2f6f3a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M34 22c2 2 4 4 2 8-2 4-6 4-8 2-2-2-2-6 2-10" stroke="#2f6f3a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
