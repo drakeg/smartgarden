@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     # REST API
     "rest_framework",
     "rest_framework.authtoken",
+    "django_filters",
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -160,6 +162,18 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 25,
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# drf-spectacular (OpenAPI) settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SmartGarden API',
+    'DESCRIPTION': 'API for SmartGarden project',
+    'VERSION': '1.0.0',
 }
 
 # Media files
