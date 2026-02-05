@@ -23,7 +23,7 @@ services:
     restart: always
 
   db:
-    image: postgres:15
+    image: postgres:18
     environment:
       POSTGRES_DB: smartgarden
       POSTGRES_USER: postgres
