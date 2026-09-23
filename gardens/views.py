@@ -9,8 +9,10 @@ from .forms import RegistrationForm
 from django.http import JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
-from django.core import signing, mail
+from django.core import signing
+from django.core.mail import EmailMultiAlternatives
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -203,6 +205,19 @@ def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict]) -> None:
     for pod_item in pods_list:
         _apply_single_pod(garden_obj, pod_item)
 
+def _send_templated_email(subject: str, recipient: str, template_name: str, context: dict) -> None:
+    text_body = render_to_string(f"emails/{template_name}.txt", context).strip()
+    html_body = render_to_string(f"emails/{template_name}.html", context)
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        to=[recipient],
+    )
+    email.attach_alternative(html_body, "text/html")
+    email.send()
+
+
 # ---------------------------
 # Auth + Home
 # ---------------------------
@@ -259,9 +274,12 @@ def register_view(request):
                 confirm_url = request.build_absolute_uri(
                     reverse('gardens:confirm_registration', args=[token])
                 )
-                subject = 'Confirm your Smart Garden account'
-                message = f'Hi {user.username},\n\nPlease confirm your account by visiting: {confirm_url}\n\nIf you did not sign up, ignore this message.'
-                mail.send_mail(subject, message, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [user.email])
+                _send_templated_email(
+                    'Confirm your Smart Garden account',
+                    user.email,
+                    'confirm_registration',
+                    {'username': user.username, 'confirm_url': confirm_url},
+                )
                 return render(request, 'gardens/confirm_sent.html', {'email': user.email})
             else:
                 # No email configured: activate immediately and log in
@@ -291,9 +309,12 @@ def confirm_registration(request, token: str):
         email_backend = getattr(settings, 'EMAIL_BACKEND', '') or ''
         using_console = email_backend.startswith('django.core.mail.backends.console') or email_backend == ''
         if not using_console and user.email:
-            subject = 'Welcome to Smart Garden'
-            message = f'Hi {user.username},\n\nYour account is confirmed — welcome!'
-            mail.send_mail(subject, message, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [user.email])
+            _send_templated_email(
+                'Welcome to Smart Garden',
+                user.email,
+                'welcome',
+                {'username': user.username},
+            )
 
         login(request, user)
         return render(request, 'gardens/confirm_success.html', {'user': user})
