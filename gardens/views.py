@@ -576,35 +576,17 @@ def garden_import_json(request):
         return redirect(GARDEN_IMPORT_JSON)
 
     try:
-        raw = upload.read().decode("utf-8")
-        data = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        messages.error(request, "That file is not valid JSON.")
+        data = _parse_import_upload(upload)
+        garden_name, device_type, pods_data = _validate_import_data(data)
+    except ValueError as exc:
+        messages.error(request, str(exc))
         return redirect(GARDEN_IMPORT_JSON)
 
-    if not isinstance(data, dict) or data.get("version") != EXPORT_VERSION:
-        messages.error(request, f"Unsupported export version. Expected version={EXPORT_VERSION}.")
-        return redirect(GARDEN_IMPORT_JSON)
-
-    garden_name = (data.get("garden_name") or "Imported Garden").strip()[:120]
-    device_type = (data.get("device_type") or "GENERIC_12").strip()
-
-    pods_data = data.get("pods") or []
-    if not isinstance(pods_data, list) or len(pods_data) == 0:
-        messages.error(request, "Import file has no pods.")
-        return redirect(GARDEN_IMPORT_JSON)
-
-    # Create the garden under the user
-    garden = Garden.objects.create(
-        owner=request.user,
-        is_guest=False,
-        guest_token="",
-        name=garden_name,
-        device_type=device_type,
+    garden, template_count = _create_garden_from_import(
+        request.user,
+        garden_name,
+        device_type,
     )
-
-    template = get_device_template(device_type)
-    template_count = template.pod_count if template else 12
 
     # Create baseline pods 1..template_count
     for pos in range(1, template_count + 1):

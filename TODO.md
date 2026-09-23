@@ -14,8 +14,9 @@ This file captures follow-up ideas and work items from the recent refactors, acc
    - Add `celery.py`, a `tasks.send_confirmation_email` task, and docs for running a worker.
    - Keep it optional (only used when `CELERY_BROKER_URL` present).
 
-5. Add / expand tests for guest flows and import/export edge cases
-   - Tests: `guest_start` creation and cookie behavior; guest cannot toggle public; import/export roundtrip with missing fields; navbar guest badge visibility.
+5. ✅ Expanded tests for guest flows and import/export edge cases
+   - Covered `guest_start` cookie creation/reuse, guest sharing restrictions, true export→import roundtrip behavior, missing-field defaults, and navbar guest badge visibility.
+   - Import view now reuses its parsing/validation/creation helpers so the tested path and helper behavior stay aligned.
 
 6. Investigate "Session data corrupted" warnings
    - Reproduce locally and in tests; inspect `SESSION_ENGINE` and cookie signing.
