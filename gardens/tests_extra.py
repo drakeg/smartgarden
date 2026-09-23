@@ -1,3 +1,6 @@
+import json
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -26,34 +29,98 @@ class ExtraTests(TestCase):
             # likely email confirmation path — ensure the response asks the user to check email
             self.assertIn('Check your email', resp.content.decode('utf-8'))
 
+    def test_guest_start_sets_cookie_and_reuses_same_garden(self):
+        resp = self.client.get(reverse('gardens:guest_start'))
+        self.assertEqual(resp.status_code, 302)
+
+        g = Garden.objects.get(is_guest=True)
+        self.assertIn(views_module.GUEST_COOKIE_NAME, self.client.cookies)
+        cookie = self.client.cookies[views_module.GUEST_COOKIE_NAME]
+        self.assertEqual(cookie.value, g.guest_token)
+        self.assertEqual(cookie['httponly'], True)
+        self.assertEqual(cookie['samesite'], 'Lax')
+
+        second = self.client.get(reverse('gardens:guest_start'))
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(Garden.objects.filter(is_guest=True).count(), 1)
+        self.assertEqual(second.url, reverse('gardens:garden_detail', args=[g.id]))
+
     def test_guest_cannot_enable_public_link(self):
-        # Start guest session
-        resp = self.client.get(reverse('gardens:guest_start'), follow=True)
-        # Find the guest garden that was just created
+        self.client.get(reverse('gardens:guest_start'), follow=True)
         g = Garden.objects.filter(is_guest=True).order_by('-created_at').first()
         self.assertIsNotNone(g)
 
-        # Attempt to toggle public link as guest
         toggle_url = reverse('gardens:garden_toggle_public', args=[g.id])
-        resp = self.client.post(toggle_url, follow=True)
+        self.client.post(toggle_url, follow=True)
         g.refresh_from_db()
         self.assertFalse(g.is_public)
 
     def test_import_export_roundtrip(self):
-        # Create user and garden with pods and notes
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
         for pos in range(1, 4):
             pod = garden.pods.create(position=pos, plant_name=f'Plant{pos}')
             pod.notes.create(note=f'Note{pos}')
 
-        # Export as owner
         self.client.force_login(user)
-        resp = self.client.get(reverse('gardens:garden_export_json', args=[garden.id]))
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
+        export_resp = self.client.get(reverse('gardens:garden_export_json', args=[garden.id]))
+        self.assertEqual(export_resp.status_code, 200)
+        data = export_resp.json()
         self.assertEqual(data['version'], 1)
         self.assertEqual(len(data['pods']), 3)
+
+        upload = SimpleUploadedFile(
+            'garden.json',
+            json.dumps(data).encode('utf-8'),
+            content_type='application/json',
+        )
+        import_resp = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': upload},
+            follow=True,
+        )
+        self.assertEqual(import_resp.status_code, 200)
+
+        imported = user.gardens.exclude(id=garden.id).get()
+        self.assertEqual(imported.name, 'ExportGarden')
+        self.assertEqual(imported.device_type, 'AHOPEGARDEN_12')
+        self.assertEqual(imported.pods.count(), 12)
+
+        for pos in range(1, 4):
+            pod = imported.pods.get(position=pos)
+            self.assertEqual(pod.plant_name, f'Plant{pos}')
+            self.assertEqual(list(pod.notes.values_list('note', flat=True)), [f'Note{pos}'])
+
+    def test_import_missing_optional_fields_uses_defaults(self):
+        user = user_model.objects.create_user(username='defaultsuser', password='pass')
+        self.client.force_login(user)
+        payload = {
+            'version': views_module.EXPORT_VERSION,
+            'pods': [
+                {'position': 1},
+                {'position': 2, 'plant_name': 'Basil'},
+                {'position': 'not-a-number', 'plant_name': 'Ignored'},
+            ],
+        }
+        upload = SimpleUploadedFile(
+            'minimal.json',
+            json.dumps(payload).encode('utf-8'),
+            content_type='application/json',
+        )
+
+        resp = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': upload},
+            follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        imported = user.gardens.get()
+        self.assertEqual(imported.name, 'Imported Garden')
+        self.assertEqual(imported.device_type, 'GENERIC_12')
+        self.assertEqual(imported.pods.count(), 12)
+        self.assertEqual(imported.pods.get(position=1).plant_name, '')
+        self.assertEqual(imported.pods.get(position=2).plant_name, 'Basil')
 
     def test_guest_note_cap_enforced(self):
         # Start guest session and find garden/pod
