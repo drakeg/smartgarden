@@ -167,6 +167,7 @@ python manage.py test
 	- Development / console backend (or when `EMAIL_BACKEND` is unset): new accounts are activated immediately and the user is logged in. This keeps onboarding friction low during development.
 	- Real SMTP / transactional backends: registrations are created inactive and a confirmation email is sent with a time-limited token. The user must click the confirmation link to activate the account.
 
+- Confirmation and welcome emails are sent as multipart messages with both plain-text and HTML bodies. Templates live under `templates/emails/`.
 - Ensure you configure `DEFAULT_FROM_EMAIL` when sending real emails. Example (env):
 
 ```
