@@ -143,7 +143,7 @@ class ApiTests(APITestCase):
         resp = self.client.get('/api/gardens/')
 
         self.assertEqual(resp.status_code, 403)
-        self.assertIn('active developer API plan', resp.json()['detail'].lower())
+        self.assertIn('active developer api plan', resp.json()['detail'].lower())
 
     @override_settings(API_PAYWALL_ENABLED=True)
     def test_active_developer_entitlement_allows_api_access(self):
