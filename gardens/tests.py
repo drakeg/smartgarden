@@ -1,4 +1,5 @@
 from django.test import TestCase, Client
+from django.contrib.sessions.backends.db import SessionStore
 from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -35,6 +36,15 @@ class BasicAppTests(TestCase):
 		self.assertTrue(hasattr(settings, 'EMAIL_HOST'))
 		self.assertTrue(hasattr(settings, 'EMAIL_PORT'))
 		self.assertTrue(hasattr(settings, 'EMAIL_TIMEOUT'))
+
+	def test_database_session_roundtrip_uses_configured_secret_key(self):
+		"""Database-backed session payloads should decode with the configured key."""
+		session = SessionStore()
+		session['probe'] = 'smartgarden'
+		session.save()
+
+		reloaded = SessionStore(session_key=session.session_key)
+		self.assertEqual(reloaded.get('probe'), 'smartgarden')
 
 	def test_garden_detail_renders_for_owner(self):
 		"""Create a garden with pods and ensure the detail view renders for the owner."""
