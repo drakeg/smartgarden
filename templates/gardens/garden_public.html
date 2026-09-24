@@ -1,9 +1,32 @@
 {% extends "gardens/base.html" %}
 {% block title %}{{ garden.name }} (Public){% endblock %}
 {% block content %}
-<div class="mb-3">
-  <h1 class="h4 mb-0">{{ garden.name }}</h1>
-  <div class="muted small">{{ garden.get_device_type_display }} • Public view</div>
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-0">{{ garden.name }}</h1>
+    <div class="muted small">{{ garden.get_device_type_display }} • Public read-only view</div>
+  </div>
+  <span class="badge text-bg-success">Shared Garden</span>
+</div>
+
+<div class="card shadow-sm rounded-4 mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+      <div class="fw-semibold">Pod Status Overview</div>
+      <div class="muted small">{{ pods|length }} total pod{{ pods|length|pluralize }}</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for item in status_overview %}
+        <span class="badge rounded-pill text-bg-light border">
+          {{ item.label }} <span class="fw-bold">{{ item.count }}</span>
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-light border small">
+  This shared page shows pod names, planting status, and growing age only. Private notes, photos, and editing controls are not included.
 </div>
 
 <div class="tray shadow-sm">
@@ -12,10 +35,13 @@
       <div class="pod" style="cursor: default;">
         <div class="pos">Pod {{ pod.position }}</div>
         <div class="label">{{ pod.display_label|truncatechars:16 }}</div>
-        {% if pod.days_growing %}
-          <div class="days">{{ pod.days_growing }} day{% if pod.days_growing != 1 %}s{% endif %}</div>
+        <div class="small mb-1">
+          <span class="badge rounded-pill text-bg-light border">{{ pod.get_status_display }}</span>
+        </div>
+        {% if pod.days_growing is not None %}
+          <div class="days">{{ pod.days_growing }} day{% if pod.days_growing != 1 %}s{% endif %} growing</div>
         {% else %}
-          <div class="muted small">—</div>
+          <div class="muted small">Not dated</div>
         {% endif %}
       </div>
     {% endfor %}
