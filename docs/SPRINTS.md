@@ -155,4 +155,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/garden-status-overview`
 
+**Status:** Complete — merged in PR #22.
+
+
+### Sprint 4 — Public Garden Snapshot
+
+**Outcome:** Make public share links useful while keeping private garden history and controls private.
+
+**Acceptance criteria:**
+- Public pages show garden name, device type, pod position, plant name, current status, and growing age.
+- Public pages include the same read-only pod-status counts used on the owner view.
+- Public pages clearly identify themselves as shared/read-only.
+- Pod notes, note photos, and editing controls are never rendered on the public page.
+- Disabled/non-public share links return not-found behavior.
+- No new write endpoints or schema changes are introduced.
+- Automated tests verify visible public data and private-data exclusion.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/public-garden-snapshot`
+
 **Status:** In review.
