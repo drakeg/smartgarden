@@ -8,6 +8,9 @@
 {% if error %}
   <div class="alert alert-warning">{{ error }}</div>
 {% endif %}
+{% if notice %}
+  <div class="alert alert-success py-2">{{ notice }}</div>
+{% endif %}
 
 {% if is_guest %}
   <div class="alert alert-info py-2">
@@ -48,7 +51,21 @@
     </select>
   </div>
 
-  <button class="btn btn-primary w-100">Save Pod</button>
+  <div class="d-grid gap-2">
+    <button class="btn btn-primary" type="submit" name="action" value="save">Save Pod</button>
+    <button class="btn btn-outline-success" type="submit" name="action" value="plant_today">
+      Plant Today
+    </button>
+    <button
+      class="btn btn-outline-danger"
+      type="submit"
+      name="action"
+      value="reset"
+      hx-confirm="Reset this pod? Plant name, planted date, and status will be cleared. Notes and photos will be preserved."
+    >
+      Reset Pod
+    </button>
+  </div>
 </form>
 
 <hr class="my-3">

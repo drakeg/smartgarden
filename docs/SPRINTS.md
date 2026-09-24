@@ -118,4 +118,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/pod-note-lifecycle`
 
+**Status:** Complete — merged in PR #20.
+
+
+### Sprint 2 — Pod Planting Actions
+
+**Outcome:** Make common planting-cycle actions fast and consistent from the pod side panel.
+
+**Acceptance criteria:**
+- "Plant Today" saves the current plant name, sets the planted date to today, and sets status to Seeded.
+- "Reset Pod" clears plant name, planted date, and status back to Empty.
+- Reset preserves existing pod notes and photos as historical context.
+- Reset requires explicit confirmation in the UI.
+- Account-owner and guest-token authorization continue to be enforced server-side.
+- Cross-user attempts return not-found behavior.
+- Automated tests cover account, guest, and unauthorized usage.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/pod-planting-actions`
+
 **Status:** In review.

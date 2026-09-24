@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from . import views as views_module
 
-from .models import Garden
+from .models import Garden, PodStatus
 
 user_model = get_user_model()
 
@@ -279,6 +279,87 @@ class ExtraTests(TestCase):
             delete_resp.context['guest_notes_remaining'],
             views_module.GUEST_MAX_NOTES_TOTAL,
         )
+
+    def test_owner_can_plant_today_and_reset_pod_without_losing_notes(self):
+        user = user_model.objects.create_user(username='cycleowner', password='pass')
+        garden = user.gardens.create(name='Cycle Garden')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        note = pod.notes.create(note='Keep this history')
+        self.client.force_login(user)
+
+        plant_resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {
+                'plant_name': 'Basil',
+                'planted_at': '',
+                'status': PodStatus.EMPTY,
+                'action': 'plant_today',
+            },
+        )
+        self.assertEqual(plant_resp.status_code, 200)
+        pod.refresh_from_db()
+        self.assertEqual(pod.planted_at, views_module.timezone.localdate())
+        self.assertEqual(pod.status, PodStatus.SEEDED)
+        self.assertEqual(pod.plant_name, 'Basil')
+        self.assertContains(plant_resp, 'Pod marked as seeded today.')
+
+        reset_resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {'action': 'reset'},
+        )
+        self.assertEqual(reset_resp.status_code, 200)
+        pod.refresh_from_db()
+        self.assertEqual(pod.plant_name, '')
+        self.assertIsNone(pod.planted_at)
+        self.assertEqual(pod.status, PodStatus.EMPTY)
+        self.assertTrue(pod.notes.filter(id=note.id, note='Keep this history').exists())
+        self.assertContains(reset_resp, 'Existing notes and photos were preserved.')
+
+    def test_guest_can_use_planting_actions_on_owned_garden(self):
+        self.client.get(reverse('gardens:guest_start'))
+        garden = Garden.objects.get(is_guest=True)
+        pod = garden.pods.first()
+
+        plant_resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {
+                'plant_name': 'Lettuce',
+                'planted_at': '',
+                'status': PodStatus.EMPTY,
+                'action': 'plant_today',
+            },
+        )
+        self.assertEqual(plant_resp.status_code, 200)
+        pod.refresh_from_db()
+        self.assertEqual(pod.plant_name, 'Lettuce')
+        self.assertEqual(pod.status, PodStatus.SEEDED)
+        self.assertEqual(pod.planted_at, views_module.timezone.localdate())
+
+        reset_resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {'action': 'reset'},
+        )
+        self.assertEqual(reset_resp.status_code, 200)
+        pod.refresh_from_db()
+        self.assertEqual(pod.status, PodStatus.EMPTY)
+        self.assertEqual(pod.plant_name, '')
+        self.assertIsNone(pod.planted_at)
+
+    def test_other_user_cannot_run_pod_planting_actions(self):
+        owner = user_model.objects.create_user(username='cycleowner2', password='pass')
+        other = user_model.objects.create_user(username='cycleother2', password='pass')
+        garden = owner.gardens.create(name='Private Cycle')
+        pod = garden.pods.create(position=1, plant_name='Parsley')
+        self.client.force_login(other)
+
+        resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {'action': 'reset'},
+        )
+
+        self.assertEqual(resp.status_code, 404)
+        pod.refresh_from_db()
+        self.assertEqual(pod.plant_name, 'Parsley')
 
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')

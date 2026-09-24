@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 
 from .device_templates import get_device_template, try_load_svg_and_map
 from .forms import GardenForm, PodForm, PodNoteForm
-from .models import Garden, Pod, PodNote
+from .models import Garden, Pod, PodNote, PodStatus
 from .models import GlobalNote
 from .forms import GlobalNoteForm
 from .tasks import queue_or_send_templated_email
@@ -506,10 +506,24 @@ def pod_panel(request, garden_id: int, position: int):
 def pod_save(request, garden_id: int, position: int):
     garden = _get_editable_garden_or_404(request, garden_id)
     pod = get_object_or_404(Pod, garden=garden, position=position)
+    action = request.POST.get("action", "save")
+    notice = None
 
-    form = PodForm(request.POST, instance=pod)
-    if form.is_valid():
-        form.save()
+    if action == "reset":
+        pod.plant_name = ""
+        pod.planted_at = None
+        pod.status = PodStatus.EMPTY
+        pod.save(update_fields=["plant_name", "planted_at", "status", "updated_at"])
+        notice = "Pod reset. Existing notes and photos were preserved."
+    else:
+        form = PodForm(request.POST, instance=pod)
+        if form.is_valid():
+            pod = form.save(commit=False)
+            if action == "plant_today":
+                pod.planted_at = timezone.localdate()
+                pod.status = PodStatus.SEEDED
+                notice = "Pod marked as seeded today."
+            pod.save()
 
     pod_form = PodForm(instance=pod)
     note_form = PodNoteForm()
@@ -521,6 +535,7 @@ def pod_save(request, garden_id: int, position: int):
         "today": timezone.localdate(),
         "is_guest": garden.is_guest,
         "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+        "notice": notice,
     })
 
 @require_http_methods(["POST"])
