@@ -30,11 +30,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run migrations
-        run: python manage.py migrate --noinput
+      - name: Prepare test environment
+        env:
+          SECRET_KEY: ci-only-secret-key
+        run: |
+          mkdir -p staticfiles
+          python manage.py check
+          python manage.py migrate --noinput
 
       - name: Run tests
         env:
-          # Ensure tests run with default settings; override if needed
+          SECRET_KEY: ci-only-secret-key
           PYTHONUNBUFFERED: 1
         run: python manage.py test --verbosity=2
