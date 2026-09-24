@@ -11,6 +11,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - SVG and grid layout for pod placement
 - HTMX-powered side panel for quick pod editing
 - Inline pod-note add, edit, delete, and optional photo management
+- Quick pod planting actions for "Plant Today" and confirmed reset while preserving note history
 - Clean front/back visual overlays on garden detail
 
 ## Prerequisites
