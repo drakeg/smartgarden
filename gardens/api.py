@@ -63,6 +63,8 @@ class GardenViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'share_slug']
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Garden.objects.none()
         return Garden.objects.filter(
             owner=self.request.user,
             is_guest=False,
@@ -79,6 +81,8 @@ class PodViewSet(viewsets.ModelViewSet):
     search_fields = ['plant_name']
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Pod.objects.none()
         return Pod.objects.filter(
             garden__owner=self.request.user,
             garden__is_guest=False,
@@ -98,6 +102,8 @@ class PodNoteViewSet(viewsets.ModelViewSet):
     search_fields = ['note']
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return PodNote.objects.none()
         return PodNote.objects.filter(
             pod__garden__owner=self.request.user,
             pod__garden__is_guest=False,
