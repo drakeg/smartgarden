@@ -96,14 +96,16 @@
                 hx-target="#pod-note-{{ n.id }}"
                 hx-swap="outerHTML"
               >Edit</button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
+              <form
+                class="d-inline"
                 hx-post="{% url 'gardens:pod_note_delete' garden.id pod.position n.id %}"
                 hx-target="#sidepanel"
                 hx-swap="innerHTML"
                 hx-confirm="Delete this note? This cannot be undone."
-              >Delete</button>
+              >
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
             </div>
           </div>
           <div style="white-space: pre-wrap;">{{ n.note }}</div>
