@@ -10,9 +10,9 @@ This file captures follow-up ideas and work items from the recent refactors, acc
    - Added environment-backed Django email settings and a production SMTP example.
    - Documented generic SMTP plus SendGrid, Mailgun, and Amazon SES SMTP configuration.
 
-4. Scaffold Celery for async email sending
-   - Add `celery.py`, a `tasks.send_confirmation_email` task, and docs for running a worker.
-   - Keep it optional (only used when `CELERY_BROKER_URL` present).
+4. ✅ Scaffold Celery for async email sending
+   - Added the Celery application and reusable templated-email task with worker documentation.
+   - Email dispatch remains synchronous unless `CELERY_BROKER_URL` is configured, preserving simple/local deployments.
 
 5. ✅ Expanded tests for guest flows and import/export edge cases
    - Covered `guest_start` cookie creation/reuse, guest sharing restrictions, true export→import roundtrip behavior, missing-field defaults, and navbar guest badge visibility.
