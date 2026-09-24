@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 from django.core import mail, signing
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -81,6 +82,44 @@ class ExtraTests(TestCase):
         self.assertEqual(len(message.alternatives), 1)
         self.assertEqual(message.alternatives[0].mimetype, 'text/html')
         self.assertIn('welcome!', message.alternatives[0].content.lower())
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEFAULT_FROM_EMAIL='noreply@example.com',
+        CELERY_BROKER_URL='',
+    )
+    def test_registration_email_falls_back_to_synchronous_send_without_broker(self):
+        self.client.post(reverse('gardens:register'), {
+            'username': 'syncuser',
+            'email': 'sync@example.com',
+            'password1': 'complexpass123',
+            'password2': 'complexpass123',
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['sync@example.com'])
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEFAULT_FROM_EMAIL='noreply@example.com',
+        CELERY_BROKER_URL='memory://',
+    )
+    @patch('gardens.tasks.send_templated_email_task.delay')
+    def test_registration_email_is_queued_when_broker_is_configured(self, delay_mock):
+        resp = self.client.post(reverse('gardens:register'), {
+            'username': 'asyncuser',
+            'email': 'async@example.com',
+            'password1': 'complexpass123',
+            'password2': 'complexpass123',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        delay_mock.assert_called_once()
+        args = delay_mock.call_args.args
+        self.assertEqual(args[0], 'Confirm your Smart Garden account')
+        self.assertEqual(args[1], 'async@example.com')
+        self.assertEqual(args[2], 'confirm_registration')
+        self.assertEqual(args[3]['username'], 'asyncuser')
+        self.assertIn('/accounts/confirm/', args[3]['confirm_url'])
 
     def test_guest_start_sets_cookie_and_reuses_same_garden(self):
         resp = self.client.get(reverse('gardens:guest_start'))
