@@ -137,6 +137,10 @@ CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', '')
 CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() in ('1', 'true', 'yes')
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Optional developer API paywall. When enabled, API viewsets require an
+# active DeveloperAccess entitlement unless the caller is staff/superuser.
+API_PAYWALL_ENABLED = os.environ.get('API_PAYWALL_ENABLED', 'False').lower() in ('1', 'true', 'yes')
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
