@@ -10,6 +10,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - Account garden lifecycle controls for rename/edit and confirmed deletion
 - SVG and grid layout for pod placement
 - HTMX-powered side panel for quick pod editing
+- Inline pod-note add, edit, delete, and optional photo management
 - Clean front/back visual overlays on garden detail
 
 ## Prerequisites

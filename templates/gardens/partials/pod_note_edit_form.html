@@ -1,0 +1,43 @@
+<div id="pod-note-{{ note.id }}" class="border rounded-3 p-2 bg-light">
+  <form
+    hx-post="{% url 'gardens:pod_note_edit' garden.id pod.position note.id %}"
+    hx-target="#sidepanel"
+    hx-swap="innerHTML"
+    enctype="multipart/form-data"
+  >
+    {% csrf_token %}
+    <div class="mb-2">
+      <label for="{{ form.note.id_for_label }}" class="form-label small">Note</label>
+      {{ form.note }}
+      {% for error in form.note.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    {% if note.photo %}
+      <div class="mb-2">
+        <div class="muted small mb-1">Current photo</div>
+        <img src="{{ note.photo.url }}" class="img-fluid rounded-3" alt="Current photo attached to pod {{ pod.position }} note">
+      </div>
+    {% endif %}
+
+    <div class="mb-2">
+      <label for="{{ form.photo.id_for_label }}" class="form-label small">Replace photo (optional)</label>
+      {{ form.photo }}
+      {% for error in form.photo.errors %}
+        <div class="text-danger small">{{ error }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-primary">Save Note</button>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary"
+        hx-get="{% url 'gardens:pod_panel' garden.id pod.position %}"
+        hx-target="#sidepanel"
+        hx-swap="innerHTML"
+      >Cancel</button>
+    </div>
+  </form>
+</div>
