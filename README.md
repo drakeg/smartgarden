@@ -229,6 +229,29 @@ EMAIL_USE_SSL=False
 
 Do not enable both `EMAIL_USE_TLS` and `EMAIL_USE_SSL` at the same time. Provider credentials should be supplied through deployment secrets or environment variables and should never be committed.
 
+
+### Optional Celery email delivery
+
+Registration and welcome emails are sent synchronously by default. To queue them through Celery instead, configure a broker:
+
+```ini
+CELERY_BROKER_URL=redis://localhost:6379/0
+```
+
+Then start a worker from the project root:
+
+```bash
+celery -A smartgarden worker --loglevel=info
+```
+
+When `CELERY_BROKER_URL` is unset or empty, Smart Garden does not require a running worker and sends email directly from the web process. This keeps local development and simple deployments unchanged.
+
+For test/dev environments you can also force Celery tasks to execute eagerly:
+
+```ini
+CELERY_TASK_ALWAYS_EAGER=True
+```
+
 ## SECRET_KEY and Production
 
 - This project reads `SECRET_KEY` from the environment in production. If no `SECRET_KEY` is found during development, the app will generate a temporary key and emit a warning — do not use that generated key in production.
