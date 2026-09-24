@@ -71,6 +71,22 @@
   </div>
 {% endif %}
 
+<div class="sg-status-overview card shadow-sm rounded-4 mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+      <div class="fw-semibold">Pod Status Overview</div>
+      <div class="muted small">{{ pods|length }} total pod{{ pods|length|pluralize }}</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for item in status_overview %}
+        <span class="badge rounded-pill text-bg-light border sg-status-pill">
+          {{ item.label }} <span class="fw-bold">{{ item.count }}</span>
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
 
   <!-- LEFT COLUMN: Device Layout -->
@@ -165,6 +181,9 @@
 
                 <div class="label">
                   {{ pod.display_label|truncatechars:16 }}
+                </div>
+                <div class="small mb-1">
+                  <span class="badge rounded-pill text-bg-light border">{{ pod.get_status_display }}</span>
                 </div>
 
                 {% if pod.days_growing %}
