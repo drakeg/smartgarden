@@ -9,7 +9,7 @@ services:
       - .:/app:cached
       - staticfiles:/app/staticfiles
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
     environment:
       - DEBUG=True
       - SECRET_KEY=replace-me
