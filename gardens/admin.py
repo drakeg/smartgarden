@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Garden, Pod, PodNote, GlobalNote
+from .models import DeveloperAccess, Garden, Pod, PodNote, GlobalNote
 
 class PodInline(admin.TabularInline):
     model = Pod
@@ -29,3 +29,10 @@ class GlobalNoteAdmin(admin.ModelAdmin):
     list_display = ("title", "author", "created_at")
     search_fields = ("title", "note", "author__username")
 
+
+
+@admin.register(DeveloperAccess)
+class DeveloperAccessAdmin(admin.ModelAdmin):
+    list_display = ("user", "plan", "status", "billing_provider", "access_expires_at", "updated_at")
+    list_filter = ("plan", "status", "billing_provider")
+    search_fields = ("user__username", "user__email", "billing_customer_id", "billing_subscription_id")

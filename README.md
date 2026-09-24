@@ -120,13 +120,15 @@ WhiteNoise is enabled via `MIDDLEWARE` and `STATICFILES_STORAGE` in `smartgarden
 
 A development `docker-compose.yml` is provided that mounts your source directory so code changes are visible without rebuilding the image. It runs the Django development server.
 
-Start development compose:
+Create a local `.env` from the example and choose the host port:
 
 ```bash
+cp .env.example .env
+# edit APP_PORT if desired, for example APP_PORT=8085
 docker compose up --build
 ```
 
-This exposes the app on `http://localhost:8000`. The service mounts a `staticfiles` volume for collected static, and the container runs migrations at startup.
+The default is `http://localhost:8000`. If `APP_PORT=8085`, use `http://localhost:8085`. The container still uses port 8000 internally.
 
 ### Docker Compose — Production
 
@@ -148,10 +150,10 @@ POSTGRES_HOST=db
 POSTGRES_PORT=5432
 ```
 
-Start production compose (detached):
+Set `APP_PORT` in `.env.prod` (default example: `APP_PORT=80`) and start production Compose using that file for both Compose substitution and container environment:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 ```
 
 Notes:
@@ -340,6 +342,18 @@ curl -H "Authorization: Token <your-token>" http://localhost:8000/api/global-not
 The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`.
 
 Garden, pod, and pod-note API endpoints require authentication and are scoped to the signed-in user's non-guest gardens. Cross-user objects are not exposed through those endpoints. Global notes remain publicly readable, but only their author can update or delete them.
+
+### Optional developer API paywall
+
+Smart Garden has a provider-neutral developer entitlement gate. It is disabled by default.
+
+```ini
+API_PAYWALL_ENABLED=False
+```
+
+When set to `True`, API viewsets require an active `DeveloperAccess` record. Plans and subscription state are stored independently of any payment processor, so a future Stripe, Paddle, or other billing webhook can activate/suspend access without changing API authentication.
+
+See [Developer API Access and Paywall](docs/DEVELOPER_API.md) for the architecture and rollout plan.
 
 ## Development standards
 

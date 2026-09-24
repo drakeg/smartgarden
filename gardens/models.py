@@ -120,3 +120,52 @@ class GlobalNote(models.Model):
             return f"{self.title} (@{self.created_at.date()})"
         return f"Global note @ {self.created_at}"
 
+
+
+class DeveloperPlan(models.TextChoices):
+    STARTER = "STARTER", "Starter"
+    PRO = "PRO", "Pro"
+    ENTERPRISE = "ENTERPRISE", "Enterprise"
+
+
+class DeveloperAccessStatus(models.TextChoices):
+    INACTIVE = "INACTIVE", "Inactive"
+    ACTIVE = "ACTIVE", "Active"
+    PAST_DUE = "PAST_DUE", "Past due"
+    CANCELED = "CANCELED", "Canceled"
+
+
+class DeveloperAccess(models.Model):
+    """Billing-provider-neutral API entitlement for developer access."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="developer_access",
+    )
+    plan = models.CharField(
+        max_length=20,
+        choices=DeveloperPlan.choices,
+        default=DeveloperPlan.STARTER,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=DeveloperAccessStatus.choices,
+        default=DeveloperAccessStatus.INACTIVE,
+    )
+    billing_provider = models.CharField(max_length=40, blank=True)
+    billing_customer_id = models.CharField(max_length=120, blank=True)
+    billing_subscription_id = models.CharField(max_length=120, blank=True)
+    access_expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def has_access(self) -> bool:
+        if self.status != DeveloperAccessStatus.ACTIVE:
+            return False
+        if self.access_expires_at and self.access_expires_at <= timezone.now():
+            return False
+        return True
+
+    def __str__(self) -> str:
+        return f"{self.user} — {self.get_plan_display()} ({self.get_status_display()})"

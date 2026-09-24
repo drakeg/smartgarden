@@ -1,8 +1,29 @@
+from django.conf import settings
 from rest_framework import permissions, viewsets
 from rest_framework.exceptions import PermissionDenied
 
-from .models import Garden, GlobalNote, Pod, PodNote
+from .models import DeveloperAccess, Garden, GlobalNote, Pod, PodNote
 from .serializers import GardenSerializer, GlobalNoteSerializer, PodNoteSerializer, PodSerializer
+
+
+class HasDeveloperApiAccess(permissions.BasePermission):
+    message = "An active developer API plan is required."
+
+    def has_permission(self, request, view):
+        if not settings.API_PAYWALL_ENABLED:
+            return True
+
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+
+        try:
+            access = user.developer_access
+        except DeveloperAccess.DoesNotExist:
+            return False
+        return access.has_access()
 
 
 class IsGardenOwner(permissions.BasePermission):
@@ -37,11 +58,13 @@ class IsGlobalNoteAuthorOrReadOnly(permissions.BasePermission):
 
 class GardenViewSet(viewsets.ModelViewSet):
     serializer_class = GardenSerializer
-    permission_classes = [permissions.IsAuthenticated, IsGardenOwner]
+    permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsGardenOwner]
     filterset_fields = ['device_type', 'is_public']
     search_fields = ['name', 'share_slug']
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Garden.objects.none()
         return Garden.objects.filter(
             owner=self.request.user,
             is_guest=False,
@@ -53,11 +76,13 @@ class GardenViewSet(viewsets.ModelViewSet):
 
 class PodViewSet(viewsets.ModelViewSet):
     serializer_class = PodSerializer
-    permission_classes = [permissions.IsAuthenticated, IsPodGardenOwner]
+    permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsPodGardenOwner]
     filterset_fields = ['garden', 'position', 'status']
     search_fields = ['plant_name']
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Pod.objects.none()
         return Pod.objects.filter(
             garden__owner=self.request.user,
             garden__is_guest=False,
@@ -72,11 +97,13 @@ class PodViewSet(viewsets.ModelViewSet):
 
 class PodNoteViewSet(viewsets.ModelViewSet):
     serializer_class = PodNoteSerializer
-    permission_classes = [permissions.IsAuthenticated, IsPodNoteGardenOwner]
+    permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsPodNoteGardenOwner]
     filterset_fields = ['pod__garden', 'pod__position']
     search_fields = ['note']
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return PodNote.objects.none()
         return PodNote.objects.filter(
             pod__garden__owner=self.request.user,
             pod__garden__is_guest=False,
@@ -92,7 +119,7 @@ class PodNoteViewSet(viewsets.ModelViewSet):
 class GlobalNoteViewSet(viewsets.ModelViewSet):
     queryset = GlobalNote.objects.all().order_by('-created_at')
     serializer_class = GlobalNoteSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsGlobalNoteAuthorOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasDeveloperApiAccess, IsGlobalNoteAuthorOrReadOnly]
     filterset_fields = ['author__username']
     search_fields = ['title', 'note', 'author__username']
 

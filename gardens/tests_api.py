@@ -1,9 +1,13 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import Garden, GlobalNote, Pod
+from .models import DeveloperAccess, DeveloperAccessStatus, Garden, GlobalNote, Pod
 
 user_model = get_user_model()
 
@@ -130,6 +134,68 @@ class ApiTests(APITestCase):
         self.assertEqual(delete_resp.status_code, 403)
         note.refresh_from_db()
         self.assertEqual(note.title, 'Other')
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_paywall_blocks_authenticated_user_without_entitlement(self):
+        Garden.objects.create(owner=self.user, name='Paywalled Garden')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/gardens/')
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('active developer api plan', resp.json()['detail'].lower())
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_active_developer_entitlement_allows_api_access(self):
+        DeveloperAccess.objects.create(
+            user=self.user,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        Garden.objects.create(owner=self.user, name='Developer Garden')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/gardens/')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(any(item['name'] == 'Developer Garden' for item in resp.json().get('results', [])))
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_expired_or_past_due_developer_entitlement_is_denied(self):
+        access = DeveloperAccess.objects.create(
+            user=self.user,
+            status=DeveloperAccessStatus.ACTIVE,
+            access_expires_at=timezone.now() - timedelta(minutes=1),
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        expired_resp = self.client.get('/api/gardens/')
+        self.assertEqual(expired_resp.status_code, 403)
+
+        access.access_expires_at = None
+        access.status = DeveloperAccessStatus.PAST_DUE
+        access.save(update_fields=['access_expires_at', 'status'])
+
+        past_due_resp = self.client.get('/api/gardens/')
+        self.assertEqual(past_due_resp.status_code, 403)
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_staff_bypasses_developer_paywall(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/gardens/')
+
+        self.assertEqual(resp.status_code, 200)
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_paywall_covers_public_global_notes_api(self):
+        GlobalNote.objects.create(title='Public', note='Web-visible')
+        self.client.credentials()
+
+        resp = self.client.get('/api/global-notes/')
+
+        self.assertIn(resp.status_code, (401, 403))
 
     def test_openapi_schema_and_docs_available(self):
         # schema JSON
