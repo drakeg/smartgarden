@@ -10,9 +10,7 @@ from django.http import JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
 from django.core import signing
-from django.core.mail import EmailMultiAlternatives
 from django.shortcuts import get_object_or_404, redirect, render
-from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -21,6 +19,7 @@ from .forms import GardenForm, PodForm, PodNoteForm
 from .models import Garden, Pod, PodNote
 from .models import GlobalNote
 from .forms import GlobalNoteForm
+from .tasks import queue_or_send_templated_email
 
 EXPORT_VERSION = 1
 
@@ -205,19 +204,6 @@ def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict]) -> None:
     for pod_item in pods_list:
         _apply_single_pod(garden_obj, pod_item)
 
-def _send_templated_email(subject: str, recipient: str, template_name: str, context: dict) -> None:
-    text_body = render_to_string(f"emails/{template_name}.txt", context).strip()
-    html_body = render_to_string(f"emails/{template_name}.html", context)
-    email = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        to=[recipient],
-    )
-    email.attach_alternative(html_body, "text/html")
-    email.send()
-
-
 # ---------------------------
 # Auth + Home
 # ---------------------------
@@ -274,7 +260,7 @@ def register_view(request):
                 confirm_url = request.build_absolute_uri(
                     reverse('gardens:confirm_registration', args=[token])
                 )
-                _send_templated_email(
+                queue_or_send_templated_email(
                     'Confirm your Smart Garden account',
                     user.email,
                     'confirm_registration',
@@ -309,7 +295,7 @@ def confirm_registration(request, token: str):
         email_backend = getattr(settings, 'EMAIL_BACKEND', '') or ''
         using_console = email_backend.startswith('django.core.mail.backends.console') or email_backend == ''
         if not using_console and user.email:
-            _send_templated_email(
+            queue_or_send_templated_email(
                 'Welcome to Smart Garden',
                 user.email,
                 'welcome',
