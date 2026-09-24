@@ -137,4 +137,22 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/pod-planting-actions`
 
+**Status:** Complete — merged in PR #21.
+
+
+### Sprint 3 — Garden Status Overview
+
+**Outcome:** Make the state of the entire garden understandable at a glance without opening each pod.
+
+**Acceptance criteria:**
+- Garden detail shows counts for every supported pod status: Empty, Seeded, Sprouted, Growing, Harvesting, and Removed.
+- The overview is derived from the already-loaded pod collection and requires no schema change.
+- The total pod count is visible alongside the status breakdown.
+- Grid fallback cards display each pod's current status.
+- The overview works for both account-owned and guest gardens.
+- Automated tests verify status counts and guest behavior.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/garden-status-overview`
+
 **Status:** In review.
