@@ -561,6 +561,63 @@ def pod_note_add(request, garden_id: int, position: int):
         "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
     })
 
+@require_http_methods(["GET", "POST"])
+def pod_note_edit(request, garden_id: int, position: int, note_id: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    note = get_object_or_404(PodNote, id=note_id, pod=pod)
+
+    if request.method == "GET":
+        form = PodNoteForm(instance=note)
+        return render(request, "gardens/partials/pod_note_edit_form.html", {
+            "garden": garden,
+            "pod": pod,
+            "note": note,
+            "form": form,
+        })
+
+    form = PodNoteForm(request.POST, request.FILES, instance=note)
+    if form.is_valid():
+        form.save()
+
+    pod_form = PodForm(instance=pod)
+    note_form = PodNoteForm()
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": pod_form,
+        "note_form": note_form,
+        "today": timezone.localdate(),
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+        "edit_error_note_id": note.id if form.errors else None,
+        "edit_note_form": form if form.errors else None,
+    })
+
+
+@require_http_methods(["POST"])
+def pod_note_delete(request, garden_id: int, position: int, note_id: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    note = get_object_or_404(PodNote, id=note_id, pod=pod)
+
+    if note.photo:
+        note.photo.delete(save=False)
+    note.delete()
+
+    pod_form = PodForm(instance=pod)
+    note_form = PodNoteForm()
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": pod_form,
+        "note_form": note_form,
+        "today": timezone.localdate(),
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+    })
+
+
 # (flip view removed)
 # ---------------------------
 # Sharing
