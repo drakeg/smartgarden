@@ -458,6 +458,14 @@ def garden_detail(request, garden_id: int):
     front = getattr(garden, "view_front", None) or "left"
 
     pods = list(garden.pods.all().order_by("position"))
+    status_overview = [
+        {
+            "value": value,
+            "label": label,
+            "count": sum(1 for pod in pods if pod.status == value),
+        }
+        for value, label in PodStatus.choices
+    ]
 
     # Build rows for grid fallback (3 columns x 4 rows for Ahopegarden 12)
     # If you later add other devices, put cols on the template or infer from device.
@@ -479,6 +487,7 @@ def garden_detail(request, garden_id: int):
         "is_guest": garden.is_guest,
         "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
         "front": front,               # "left" or "right"
+        "status_overview": status_overview,
     })
 
 # ---------------------------
