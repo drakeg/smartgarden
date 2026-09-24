@@ -254,7 +254,9 @@ CELERY_TASK_ALWAYS_EAGER=True
 
 ## SECRET_KEY and Production
 
-- This project reads `SECRET_KEY` from the environment in production. If no `SECRET_KEY` is found during development, the app will generate a temporary key and emit a warning — do not use that generated key in production.
+- Smart Garden reads `SECRET_KEY` from the environment for shared and production deployments.
+- When `DEBUG=True` and no `SECRET_KEY` is supplied, the app uses a fixed **development-only** key. This prevents Django database sessions from becoming unreadable every time the development process restarts.
+- When `DEBUG=False`, startup fails unless `SECRET_KEY` is explicitly configured. This avoids accidentally running production with a transient or insecure key.
 
 - To generate a secure key locally you can run:
 
@@ -333,6 +335,8 @@ The DRF router also provides endpoints for gardens, pods and pod-notes under `/a
 - Run tests and ensure `collectstatic` is used if you change static assets.
 
 ## Troubleshooting
+
+- **"Session data corrupted" after changing `SECRET_KEY`:** Django session payloads are signed with the secret key. If the key changes, existing sessions cannot be decoded. Clear the site's session cookie (or run `python manage.py clearsessions` for expired database sessions), then log in again. Do not rotate `SECRET_KEY` casually in production because active sessions will be invalidated.
 - "CSS not loading": verify `STATIC_URL`, `STATICFILES_DIRS`, and that static files exist under `static/`.
 - "Django not found": activate the virtualenv used by the project (`source ../.venv/bin/activate`).
 
