@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os
 import logging
-from django.core.management.utils import get_random_secret_key
+from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
 import dj_database_url
 
@@ -22,18 +22,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Read sensitive/overrideable settings from environment for production.
-# Do NOT hard-code secrets in source. Prefer environment variable `SECRET_KEY`.
-SECRET_KEY = os.environ.get('SECRET_KEY')
-if not SECRET_KEY:
-    # Generate a temporary key for development/testing. In production, set SECRET_KEY env var.
-    logging.warning('SECRET_KEY not found in environment; generating a temporary key for development.')
-    SECRET_KEY = get_random_secret_key()
-
 # DEBUG should be False in production. Use environment variable to control it.
 _DEBUG_ENV = os.environ.get('DEBUG', 'True')
 DEBUG = str(_DEBUG_ENV).lower() in ('1', 'true', 'yes')
+
+# SECURITY WARNING: keep the secret key used in production secret.
+#
+# A randomly generated key on every startup invalidates Django's signed session
+# payloads and can produce "Session data corrupted" warnings after a restart.
+# Use a fixed, intentionally insecure key only for local development. Production
+# must always provide SECRET_KEY explicitly.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'smartgarden-insecure-development-only-secret-key'
+        logging.warning(
+            'SECRET_KEY not found; using the fixed development-only key. '
+            'Set SECRET_KEY explicitly for any shared or production deployment.'
+        )
+    else:
+        raise ImproperlyConfigured('SECRET_KEY must be set when DEBUG=False.')
 
 # ALLOWED_HOSTS can be provided as a comma-separated list in env.
 _allowed = os.environ.get('ALLOWED_HOSTS', '')

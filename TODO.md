@@ -18,9 +18,9 @@ This file captures follow-up ideas and work items from the recent refactors, acc
    - Covered `guest_start` cookie creation/reuse, guest sharing restrictions, true export→import roundtrip behavior, missing-field defaults, and navbar guest badge visibility.
    - Import view now reuses its parsing/validation/creation helpers so the tested path and helper behavior stay aligned.
 
-6. Investigate "Session data corrupted" warnings
-   - Reproduce locally and in tests; inspect `SESSION_ENGINE` and cookie signing.
-   - Add guidance or fix (clear corrupted sessions in dev, rotate keys before prod use).
+6. ✅ Investigate "Session data corrupted" warnings
+   - Root cause: development generated a new `SECRET_KEY` on every startup, invalidating Django's signed database-session payloads after restarts.
+   - Development now uses a stable development-only key; production requires an explicit `SECRET_KEY`, with recovery guidance documented.
 
 7. Re-run full test suite and fix failures/warnings
    - Execute `python3 manage.py test --verbosity=2` and resolve any failures or warnings observed (session warnings, template warnings).
