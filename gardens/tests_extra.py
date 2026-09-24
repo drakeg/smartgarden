@@ -204,6 +204,82 @@ class ExtraTests(TestCase):
         self.assertEqual(delete_resp.url, reverse('gardens:login'))
         self.assertTrue(Garden.objects.filter(id=garden.id).exists())
 
+    def test_owner_can_edit_and_delete_pod_note(self):
+        user = user_model.objects.create_user(username='noteowner', password='pass')
+        garden = user.gardens.create(name='Notes Garden')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        note = pod.notes.create(note='Original note')
+        self.client.force_login(user)
+
+        edit_get = self.client.get(
+            reverse('gardens:pod_note_edit', args=[garden.id, pod.position, note.id])
+        )
+        self.assertEqual(edit_get.status_code, 200)
+        self.assertContains(edit_get, 'Original note')
+
+        edit_post = self.client.post(
+            reverse('gardens:pod_note_edit', args=[garden.id, pod.position, note.id]),
+            {'note': 'Updated note'},
+        )
+        self.assertEqual(edit_post.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(note.note, 'Updated note')
+
+        delete_get = self.client.get(
+            reverse('gardens:pod_note_delete', args=[garden.id, pod.position, note.id])
+        )
+        self.assertEqual(delete_get.status_code, 405)
+        self.assertTrue(pod.notes.filter(id=note.id).exists())
+
+        delete_post = self.client.post(
+            reverse('gardens:pod_note_delete', args=[garden.id, pod.position, note.id])
+        )
+        self.assertEqual(delete_post.status_code, 200)
+        self.assertFalse(pod.notes.filter(id=note.id).exists())
+
+    def test_other_user_cannot_edit_or_delete_pod_note(self):
+        owner = user_model.objects.create_user(username='noteowner2', password='pass')
+        other = user_model.objects.create_user(username='noteother2', password='pass')
+        garden = owner.gardens.create(name='Private Notes')
+        pod = garden.pods.create(position=1)
+        note = pod.notes.create(note='Private note')
+        self.client.force_login(other)
+
+        edit_resp = self.client.get(
+            reverse('gardens:pod_note_edit', args=[garden.id, pod.position, note.id])
+        )
+        delete_resp = self.client.post(
+            reverse('gardens:pod_note_delete', args=[garden.id, pod.position, note.id])
+        )
+
+        self.assertEqual(edit_resp.status_code, 404)
+        self.assertEqual(delete_resp.status_code, 404)
+        self.assertTrue(pod.notes.filter(id=note.id).exists())
+
+    def test_guest_can_manage_own_pod_note_and_delete_restores_quota(self):
+        self.client.get(reverse('gardens:guest_start'))
+        garden = Garden.objects.get(is_guest=True)
+        pod = garden.pods.first()
+        note = pod.notes.create(note='Guest note')
+
+        edit_resp = self.client.post(
+            reverse('gardens:pod_note_edit', args=[garden.id, pod.position, note.id]),
+            {'note': 'Guest note updated'},
+        )
+        self.assertEqual(edit_resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(note.note, 'Guest note updated')
+
+        delete_resp = self.client.post(
+            reverse('gardens:pod_note_delete', args=[garden.id, pod.position, note.id])
+        )
+        self.assertEqual(delete_resp.status_code, 200)
+        self.assertFalse(pod.notes.filter(id=note.id).exists())
+        self.assertEqual(
+            delete_resp.context['guest_notes_remaining'],
+            views_module.GUEST_MAX_NOTES_TOTAL,
+        )
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
