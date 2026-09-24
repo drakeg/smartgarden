@@ -3,8 +3,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import GlobalNote
-from .models import Garden
+from .models import Garden, GlobalNote, Pod
 
 user_model = get_user_model()
 
@@ -34,29 +33,103 @@ class ApiTests(APITestCase):
         resp = self.client.post('/api/global-notes/', {'title': 'NoAuth', 'note': 'Should fail'})
         self.assertIn(resp.status_code, (401, 403))
 
-    def test_gardens_filtering_and_search(self):
-        # create two users and gardens
+    def test_gardens_filtering_and_search_are_owner_scoped(self):
         other = user_model.objects.create_user(username='other', password='pass')
         Garden.objects.create(owner=self.user, name='Alpha Garden', device_type='AHOPEGARDEN_12', is_public=True)
         Garden.objects.create(owner=other, name='Beta Garden', device_type='AHOPEGARDEN_12', is_public=False)
 
-        # filter by owner username
-        resp = self.client.get(f'/api/gardens/?owner__username={self.user.username}')
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertTrue(any(item['name'] == 'Alpha Garden' for item in data.get('results', [])))
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
 
-        # filter by is_public
         resp = self.client.get('/api/gardens/?is_public=true')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertTrue(all(item['is_public'] for item in data.get('results', [])))
+        self.assertEqual([item['name'] for item in data.get('results', [])], ['Alpha Garden'])
 
-        # search by name
         resp = self.client.get('/api/gardens/?search=Beta')
         self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertTrue(any('Beta' in item['name'] for item in data.get('results', [])))
+        self.assertEqual(resp.json().get('results', []), [])
+
+    def test_garden_pod_and_note_apis_require_authentication(self):
+        garden = Garden.objects.create(owner=self.user, name='Private')
+        pod = garden.pods.create(position=1)
+        note = pod.notes.create(note='Private note')
+
+        self.client.credentials()
+        for url in (
+            '/api/gardens/',
+            f'/api/gardens/{garden.id}/',
+            '/api/pods/',
+            f'/api/pods/{pod.id}/',
+            '/api/pod-notes/',
+            f'/api/pod-notes/{note.id}/',
+        ):
+            resp = self.client.get(url)
+            self.assertIn(resp.status_code, (401, 403))
+
+    def test_authenticated_user_cannot_read_or_modify_other_users_garden_data(self):
+        other = user_model.objects.create_user(username='apiother', password='pass')
+        other_garden = Garden.objects.create(owner=other, name='Other Private')
+        other_pod = other_garden.pods.create(position=1, plant_name='Secret Basil')
+        other_note = other_pod.notes.create(note='Secret note')
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        list_resp = self.client.get('/api/gardens/')
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertFalse(any(item['name'] == 'Other Private' for item in list_resp.json().get('results', [])))
+
+        for url in (
+            f'/api/gardens/{other_garden.id}/',
+            f'/api/pods/{other_pod.id}/',
+            f'/api/pod-notes/{other_note.id}/',
+        ):
+            get_resp = self.client.get(url)
+            patch_resp = self.client.patch(url, {'note': 'changed'}, format='json')
+            delete_resp = self.client.delete(url)
+            self.assertEqual(get_resp.status_code, 404)
+            self.assertEqual(patch_resp.status_code, 404)
+            self.assertEqual(delete_resp.status_code, 404)
+
+    def test_cannot_create_pod_or_note_under_other_users_garden(self):
+        other = user_model.objects.create_user(username='apiother2', password='pass')
+        other_garden = Garden.objects.create(owner=other, name='Other Garden')
+        other_pod = other_garden.pods.create(position=1)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        pod_resp = self.client.post('/api/pods/', {
+            'garden': other_garden.id,
+            'position': 2,
+            'plant_name': 'Injected',
+            'status': 'EMPTY',
+        }, format='json')
+        self.assertEqual(pod_resp.status_code, 403)
+
+        note_resp = self.client.post('/api/pod-notes/', {
+            'pod': other_pod.id,
+            'note': 'Injected note',
+        }, format='json')
+        self.assertEqual(note_resp.status_code, 403)
+
+    def test_global_note_update_and_delete_are_author_only(self):
+        other = user_model.objects.create_user(username='noteother', password='pass')
+        note = GlobalNote.objects.create(author=other, title='Other', note='Read only')
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        get_resp = self.client.get(f'/api/global-notes/{note.id}/')
+        patch_resp = self.client.patch(
+            f'/api/global-notes/{note.id}/',
+            {'title': 'Hijacked'},
+            format='json',
+        )
+        delete_resp = self.client.delete(f'/api/global-notes/{note.id}/')
+
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertEqual(patch_resp.status_code, 403)
+        self.assertEqual(delete_resp.status_code, 403)
+        note.refresh_from_db()
+        self.assertEqual(note.title, 'Other')
 
     def test_openapi_schema_and_docs_available(self):
         # schema JSON

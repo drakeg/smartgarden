@@ -193,4 +193,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/garden-list-summaries`
 
+**Status:** Complete — merged in PR #24.
+
+
+### Sprint 6 — API Ownership Hardening
+
+**Outcome:** Make REST API access enforce the same privacy and ownership boundaries as the web application.
+
+**Acceptance criteria:**
+- Garden, pod, and pod-note APIs require authentication.
+- Authenticated users can list/read/write only their own non-guest garden data.
+- Pod creation is rejected when the parent garden belongs to another user.
+- Pod-note creation is rejected when the parent pod belongs to another user's garden.
+- Cross-user retrieve/update/delete attempts return not-found behavior for garden data.
+- Global notes remain publicly readable but can only be edited/deleted by their author.
+- API tests cover authentication, owner isolation, cross-parent creation, and global-note author permissions.
+- README and sprint documentation are updated.
+
+**Branch:** `security/api-ownership-hardening`
+
 **Status:** In review.
