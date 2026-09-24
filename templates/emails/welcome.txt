@@ -1,0 +1,5 @@
+Hi {{ username }},
+
+Your Smart Garden account is confirmed — welcome!
+
+You can now sign in and start managing your gardens.

@@ -2,9 +2,9 @@
 
 This file captures follow-up ideas and work items from the recent refactors, accessibility fixes, registration flow, and test additions.
 
-2. Add HTML email templates and plain-text fallbacks
-   - Create `templates/emails/confirm_registration.html` and `confirm_registration.txt` (and welcome templates).
-   - Use `EmailMultiAlternatives` in views/tasks to send HTML+plain alternatives.
+2. ✅ Add HTML email templates and plain-text fallbacks
+   - Added confirmation and welcome templates in both HTML and plain text.
+   - Registration and welcome messages now use `EmailMultiAlternatives` with regression coverage for both MIME parts.
 
 3. Add transactional email provider examples and config notes
    - Include example env variables for SendGrid, Mailgun, SES, and SMTP.

@@ -1,0 +1,8 @@
+Hi {{ username }},
+
+Please confirm your Smart Garden account by visiting:
+{{ confirm_url }}
+
+This link expires in 24 hours.
+
+If you did not sign up for Smart Garden, you can ignore this message.

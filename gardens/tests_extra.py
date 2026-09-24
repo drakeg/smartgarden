@@ -1,7 +1,8 @@
 import json
 
+from django.core import mail, signing
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from . import views as views_module
@@ -28,6 +29,58 @@ class ExtraTests(TestCase):
         if '_auth_user_id' not in self.client.session:
             # likely email confirmation path — ensure the response asks the user to check email
             self.assertIn('Check your email', resp.content.decode('utf-8'))
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEFAULT_FROM_EMAIL='noreply@example.com',
+    )
+    def test_registration_email_has_plain_text_and_html_parts(self):
+        resp = self.client.post(reverse('gardens:register'), {
+            'username': 'emailuser',
+            'email': 'emailuser@example.com',
+            'password1': 'complexpass123',
+            'password2': 'complexpass123',
+        })
+        self.assertEqual(resp.status_code, 200)
+
+        user = user_model.objects.get(username='emailuser')
+        self.assertFalse(user.is_active)
+        self.assertEqual(len(mail.outbox), 1)
+
+        message = mail.outbox[0]
+        self.assertEqual(message.subject, 'Confirm your Smart Garden account')
+        self.assertEqual(message.to, ['emailuser@example.com'])
+        self.assertIn('Please confirm your Smart Garden account', message.body)
+        self.assertEqual(len(message.alternatives), 1)
+        self.assertEqual(message.alternatives[0].mimetype, 'text/html')
+        self.assertIn('Confirm your account', message.alternatives[0].content)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEFAULT_FROM_EMAIL='noreply@example.com',
+    )
+    def test_confirmation_sends_multipart_welcome_email(self):
+        user = user_model.objects.create_user(
+            username='welcomeuser',
+            email='welcome@example.com',
+            password='complexpass123',
+            is_active=False,
+        )
+        token = signing.dumps({'user_id': user.pk}, salt='email-confirm')
+
+        resp = self.client.get(reverse('gardens:confirm_registration', args=[token]))
+        self.assertEqual(resp.status_code, 200)
+
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertEqual(len(mail.outbox), 1)
+
+        message = mail.outbox[0]
+        self.assertEqual(message.subject, 'Welcome to Smart Garden')
+        self.assertIn('Your Smart Garden account is confirmed', message.body)
+        self.assertEqual(len(message.alternatives), 1)
+        self.assertEqual(message.alternatives[0].mimetype, 'text/html')
+        self.assertIn('welcome!', message.alternatives[0].content.lower())
 
     def test_guest_start_sets_cookie_and_reuses_same_garden(self):
         resp = self.client.get(reverse('gardens:guest_start'))
