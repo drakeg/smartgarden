@@ -212,4 +212,26 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `security/api-ownership-hardening`
 
+**Status:** Complete — merged in PR #25.
+
+
+### Sprint 7 — Environment Port and Developer API Paywall
+
+**Outcome:** Make deployment port selection configurable through environment files and establish a billing-provider-neutral entitlement boundary for paid developer API access.
+
+**Acceptance criteria:**
+- Development Compose publishes the app using `APP_PORT` from `.env`, defaulting to 8000.
+- Production Compose publishes nginx using `APP_PORT`, defaulting to 80.
+- `.env.example` and `.env.prod.example` document the port setting.
+- The developer API paywall is disabled by default and controlled by `API_PAYWALL_ENABLED`.
+- Developer API entitlement records support plan, subscription status, provider identifiers, and optional expiration.
+- When the paywall is enabled, API viewsets reject users without an active entitlement.
+- Active entitlements allow API access; expired/past-due entitlements do not.
+- Staff/superusers retain administrative API access.
+- Billing-provider integration is documented as a webhook-driven entitlement update flow.
+- Regression tests cover port configuration and entitlement behavior.
+- README and developer API documentation are updated.
+
+**Branch:** `feature/env-port-developer-paywall`
+
 **Status:** In review.
