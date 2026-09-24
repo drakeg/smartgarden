@@ -82,10 +82,10 @@
 {% if pod.notes.all %}
   <div class="vstack gap-2">
     {% for n in pod.notes.all %}
-      <div id="pod-note-{{ n.id }}" class="border rounded-3 p-2 bg-light">
-        {% if edit_error_note_id == n.id %}
-          {% include "gardens/partials/pod_note_edit_form.html" with note=n form=edit_note_form %}
-        {% else %}
+      {% if edit_error_note_id == n.id %}
+        {% include "gardens/partials/pod_note_edit_form.html" with note=n form=edit_note_form %}
+      {% else %}
+        <div id="pod-note-{{ n.id }}" class="border rounded-3 p-2 bg-light">
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div class="muted small">{{ n.created_at }}</div>
             <div class="d-flex gap-1">
@@ -114,8 +114,8 @@
               <img src="{{ n.photo.url }}" class="img-fluid rounded-3" alt="Photo attached to pod {{ pod.position }} note">
             </div>
           {% endif %}
-        {% endif %}
-      </div>
+        </div>
+      {% endif %}
     {% endfor %}
   </div>
 {% else %}
