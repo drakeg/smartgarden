@@ -97,3 +97,25 @@ Formal sprint documentation was introduced after the following work had already 
 - PR #18 — garden edit/delete lifecycle controls and global message rendering.
 
 Future product work should be recorded here or in linked GitHub issues before or during implementation.
+
+
+## Active sprint history
+
+### Sprint 1 — Pod Note Lifecycle
+
+**Outcome:** Let garden owners and guest-garden users correct or remove pod notes without leaving the garden side panel.
+
+**Acceptance criteria:**
+- Notes can be edited inline from the pod side panel.
+- Notes can be deleted only through an explicit POST action with confirmation in the UI.
+- Existing note photos remain available when only text is edited.
+- Deleted notes remove their attached image from storage when present.
+- Owner/guest authorization is enforced server-side through the garden access rules.
+- Cross-user note modification returns not-found behavior.
+- Deleting a guest note immediately restores one unit of the guest note quota.
+- Automated regression tests cover owner, guest, cross-user, and method restrictions.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/pod-note-lifecycle`
+
+**Status:** In review.
