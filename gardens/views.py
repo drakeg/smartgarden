@@ -376,9 +376,35 @@ def garden_list(request):
     else:
         form = GlobalNoteForm()
 
-    gardens = Garden.objects.filter(owner=request.user).order_by("-created_at")
+    gardens = list(
+        Garden.objects.filter(owner=request.user)
+        .prefetch_related("pods")
+        .order_by("-created_at")
+    )
+    garden_summaries = []
+    for garden in gardens:
+        pods = list(garden.pods.all())
+        active_count = sum(
+            1 for pod in pods
+            if pod.status not in (PodStatus.EMPTY, PodStatus.REMOVED)
+        )
+        harvesting_count = sum(1 for pod in pods if pod.status == PodStatus.HARVESTING)
+        latest_update = max((pod.updated_at for pod in pods), default=None)
+        garden_summaries.append({
+            "garden": garden,
+            "total_count": len(pods),
+            "active_count": active_count,
+            "harvesting_count": harvesting_count,
+            "latest_update": latest_update,
+        })
+
     notes = GlobalNote.objects.all().order_by("-created_at")[:50]
-    return render(request, "gardens/garden_list.html", {"gardens": gardens, "notes": notes, "form": form})
+    return render(request, "gardens/garden_list.html", {
+        "gardens": gardens,
+        "garden_summaries": garden_summaries,
+        "notes": notes,
+        "form": form,
+    })
 
 @require_http_methods(["GET", "POST"])
 def garden_create(request):
