@@ -404,6 +404,41 @@ class ExtraTests(TestCase):
         self.assertEqual(overview[PodStatus.HARVESTING], 1)
         self.assertEqual(overview[PodStatus.EMPTY], 10)
 
+    def test_public_garden_snapshot_shows_status_without_private_notes(self):
+        user = user_model.objects.create_user(username='shareowner', password='pass')
+        garden = user.gardens.create(name='Shared Garden', is_public=True)
+        garden.ensure_share_slug()
+        pod = garden.pods.create(
+            position=1,
+            plant_name='Basil',
+            planted_at=views_module.timezone.localdate(),
+            status=PodStatus.GROWING,
+        )
+        pod.notes.create(note='Private nutrient adjustment')
+
+        resp = self.client.get(reverse('gardens:garden_public', args=[garden.share_slug]))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Shared Garden')
+        self.assertContains(resp, 'Basil')
+        self.assertContains(resp, 'Growing')
+        self.assertContains(resp, 'Pod Status Overview')
+        self.assertContains(resp, 'Private notes, photos, and editing controls are not included.')
+        self.assertNotContains(resp, 'Private nutrient adjustment')
+        self.assertNotContains(resp, 'Save Pod')
+        self.assertNotContains(resp, 'Add Note')
+        overview = {item['value']: item['count'] for item in resp.context['status_overview']}
+        self.assertEqual(overview[PodStatus.GROWING], 1)
+
+    def test_nonpublic_garden_has_no_public_snapshot(self):
+        user = user_model.objects.create_user(username='privateowner', password='pass')
+        garden = user.gardens.create(name='Private Garden')
+        garden.ensure_share_slug()
+
+        resp = self.client.get(reverse('gardens:garden_public', args=[garden.share_slug]))
+
+        self.assertEqual(resp.status_code, 404)
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')

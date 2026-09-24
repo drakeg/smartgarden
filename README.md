@@ -13,6 +13,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - Inline pod-note add, edit, delete, and optional photo management
 - Quick pod planting actions for "Plant Today" and confirmed reset while preserving note history
 - Garden-level pod status overview with counts for each growth state
+- Read-only public garden snapshots with pod status/age while keeping notes and photos private
 - Clean front/back visual overlays on garden detail
 
 ## Prerequisites
