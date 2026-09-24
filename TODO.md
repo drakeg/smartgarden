@@ -6,9 +6,9 @@ This file captures follow-up ideas and work items from the recent refactors, acc
    - Added confirmation and welcome templates in both HTML and plain text.
    - Registration and welcome messages now use `EmailMultiAlternatives` with regression coverage for both MIME parts.
 
-3. Add transactional email provider examples and config notes
-   - Include example env variables for SendGrid, Mailgun, SES, and SMTP.
-   - Provide minimal Django `EMAIL_BACKEND` examples in README.
+3. ✅ Add transactional email provider examples and config notes
+   - Added environment-backed Django email settings and a production SMTP example.
+   - Documented generic SMTP plus SendGrid, Mailgun, and Amazon SES SMTP configuration.
 
 4. Scaffold Celery for async email sending
    - Add `celery.py`, a `tasks.send_confirmation_email` task, and docs for running a worker.

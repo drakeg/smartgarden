@@ -168,17 +168,66 @@ python manage.py test
 	- Real SMTP / transactional backends: registrations are created inactive and a confirmation email is sent with a time-limited token. The user must click the confirmation link to activate the account.
 
 - Confirmation and welcome emails are sent as multipart messages with both plain-text and HTML bodies. Templates live under `templates/emails/`.
-- Ensure you configure `DEFAULT_FROM_EMAIL` when sending real emails. Example (env):
+- Ensure you configure `DEFAULT_FROM_EMAIL` and SMTP settings when sending real emails. Smart Garden reads these directly from environment variables. Development defaults to Django's console email backend, so real mail is not sent unless you configure a real backend.
 
-```
-DEFAULT_FROM_EMAIL=admin@yourdomain.com
+Generic SMTP example:
+
+```ini
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.sendgrid.net
-EMAIL_HOST_USER=apikey
-EMAIL_HOST_PASSWORD=<your_api_key>
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
+EMAIL_HOST_USER=replace-me
+EMAIL_HOST_PASSWORD=replace-me
 EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_TIMEOUT=10
 ```
+
+Provider examples use the same Django SMTP backend:
+
+**SendGrid**
+
+```ini
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_HOST=smtp.sendgrid.net
+EMAIL_PORT=587
+EMAIL_HOST_USER=apikey
+EMAIL_HOST_PASSWORD=<sendgrid-api-key>
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+```
+
+**Mailgun**
+
+```ini
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_HOST=smtp.mailgun.org
+EMAIL_PORT=587
+EMAIL_HOST_USER=<mailgun-smtp-username>
+EMAIL_HOST_PASSWORD=<mailgun-smtp-password>
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+```
+
+**Amazon SES SMTP**
+
+Use the SMTP endpoint for the AWS Region where SES is configured.
+
+```ini
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_HOST=email-smtp.us-east-1.amazonaws.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=<ses-smtp-username>
+EMAIL_HOST_PASSWORD=<ses-smtp-password>
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+```
+
+Do not enable both `EMAIL_USE_TLS` and `EMAIL_USE_SSL` at the same time. Provider credentials should be supplied through deployment secrets or environment variables and should never be committed.
 
 ## SECRET_KEY and Production
 

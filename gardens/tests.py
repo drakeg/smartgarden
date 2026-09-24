@@ -28,6 +28,14 @@ class BasicAppTests(TestCase):
 		self.assertTrue(hasattr(settings, 'STATIC_URL'))
 		self.assertTrue(settings.STATIC_URL.startswith('/'))
 
+	def test_email_settings_are_configured(self):
+		"""Email settings should be explicit instead of relying on Django defaults."""
+		self.assertTrue(hasattr(settings, 'EMAIL_BACKEND'))
+		self.assertTrue(hasattr(settings, 'DEFAULT_FROM_EMAIL'))
+		self.assertTrue(hasattr(settings, 'EMAIL_HOST'))
+		self.assertTrue(hasattr(settings, 'EMAIL_PORT'))
+		self.assertTrue(hasattr(settings, 'EMAIL_TIMEOUT'))
+
 	def test_garden_detail_renders_for_owner(self):
 		"""Create a garden with pods and ensure the detail view renders for the owner."""
 		# create user and garden
