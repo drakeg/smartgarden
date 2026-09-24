@@ -1,0 +1,24 @@
+{% extends "gardens/base.html" %}
+{% block title %}Delete {{ garden.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7">
+    <div class="card border-danger shadow-sm rounded-4">
+      <div class="card-body">
+        <h1 class="h4 text-danger">Delete Garden</h1>
+        <p>
+          Are you sure you want to permanently delete <strong>{{ garden.name }}</strong>?
+          Its pods, pod notes, and uploaded pod photos tied to database records will no longer be available in Smart Garden.
+        </p>
+        <p class="text-muted small mb-4">This action cannot be undone.</p>
+
+        <form method="post" class="d-flex gap-2">
+          {% csrf_token %}
+          <button class="btn btn-danger" type="submit">Yes, Delete Garden</button>
+          <a class="btn btn-outline-secondary" href="{% url 'gardens:garden_detail' garden.id %}">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

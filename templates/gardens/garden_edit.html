@@ -1,0 +1,35 @@
+{% extends "gardens/base.html" %}
+{% block title %}Edit {{ garden.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm rounded-4">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h1 class="h4 mb-0">Edit Garden</h1>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'gardens:garden_detail' garden.id %}">Cancel</a>
+        </div>
+
+        <form method="post">
+          {% csrf_token %}
+          {{ form.non_field_errors }}
+          <div class="mb-3">
+            {{ form.name.label_tag }}
+            {{ form.name }}
+            {% for error in form.name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            {{ form.device_type.label_tag }}
+            {{ form.device_type }}
+            {% for error in form.device_type.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <button class="btn btn-primary" type="submit">Save Changes</button>
+        </form>
+
+        <hr class="my-4">
+        <a class="btn btn-outline-danger" href="{% url 'gardens:garden_delete' garden.id %}">Delete Garden</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

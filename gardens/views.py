@@ -406,6 +406,44 @@ def garden_create(request):
     return render(request, "gardens/garden_create.html", {"form": form})
 
 # ---------------------------
+# Garden lifecycle (Account owners only)
+# ---------------------------
+@require_http_methods(["GET", "POST"])
+def garden_edit(request, garden_id: int):
+    if not request.user.is_authenticated:
+        return redirect(GARDENS_LOGIN)
+
+    garden = get_object_or_404(Garden, id=garden_id, owner=request.user, is_guest=False)
+
+    if request.method == "POST":
+        form = GardenForm(request.POST, instance=garden)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Garden updated.")
+            return redirect(GARDEN_DETAIL, garden_id=garden.id)
+    else:
+        form = GardenForm(instance=garden)
+
+    return render(request, "gardens/garden_edit.html", {"garden": garden, "form": form})
+
+
+@require_http_methods(["GET", "POST"])
+def garden_delete(request, garden_id: int):
+    if not request.user.is_authenticated:
+        return redirect(GARDENS_LOGIN)
+
+    garden = get_object_or_404(Garden, id=garden_id, owner=request.user, is_guest=False)
+
+    if request.method == "POST":
+        garden_name = garden.name
+        garden.delete()
+        messages.success(request, f'Deleted garden: {garden_name}')
+        return redirect(GARDEN_LIST)
+
+    return render(request, "gardens/garden_confirm_delete.html", {"garden": garden})
+
+
+# ---------------------------
 # Garden Detail (Owner OR Guest)
 # ---------------------------
 @require_http_methods(["GET"])

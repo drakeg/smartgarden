@@ -147,6 +147,63 @@ class ExtraTests(TestCase):
         g.refresh_from_db()
         self.assertFalse(g.is_public)
 
+    def test_owner_can_edit_garden(self):
+        user = user_model.objects.create_user(username='gardenowner', password='pass')
+        garden = user.gardens.create(name='Old Name')
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse('gardens:garden_edit', args=[garden.id]),
+            {'name': 'Renamed Garden', 'device_type': garden.device_type},
+            follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        garden.refresh_from_db()
+        self.assertEqual(garden.name, 'Renamed Garden')
+        self.assertContains(resp, 'Garden updated.')
+
+    def test_other_user_cannot_edit_or_delete_garden(self):
+        owner = user_model.objects.create_user(username='owner1', password='pass')
+        other = user_model.objects.create_user(username='other1', password='pass')
+        garden = owner.gardens.create(name='Private Garden')
+        self.client.force_login(other)
+
+        edit_resp = self.client.get(reverse('gardens:garden_edit', args=[garden.id]))
+        delete_resp = self.client.post(reverse('gardens:garden_delete', args=[garden.id]))
+
+        self.assertEqual(edit_resp.status_code, 404)
+        self.assertEqual(delete_resp.status_code, 404)
+        self.assertTrue(Garden.objects.filter(id=garden.id).exists())
+
+    def test_owner_delete_requires_post_and_cascades_pods_and_notes(self):
+        user = user_model.objects.create_user(username='deleteowner', password='pass')
+        garden = user.gardens.create(name='Delete Me')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        pod.notes.create(note='Harvest soon')
+        self.client.force_login(user)
+
+        confirm = self.client.get(reverse('gardens:garden_delete', args=[garden.id]))
+        self.assertEqual(confirm.status_code, 200)
+        self.assertTrue(Garden.objects.filter(id=garden.id).exists())
+
+        resp = self.client.post(reverse('gardens:garden_delete', args=[garden.id]), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Garden.objects.filter(id=garden.id).exists())
+        self.assertContains(resp, 'Deleted garden: Delete Me')
+
+    def test_guest_garden_cannot_use_account_edit_or_delete_routes(self):
+        self.client.get(reverse('gardens:guest_start'))
+        garden = Garden.objects.get(is_guest=True)
+
+        edit_resp = self.client.get(reverse('gardens:garden_edit', args=[garden.id]))
+        delete_resp = self.client.post(reverse('gardens:garden_delete', args=[garden.id]))
+
+        self.assertEqual(edit_resp.status_code, 302)
+        self.assertEqual(delete_resp.status_code, 302)
+        self.assertEqual(edit_resp.url, reverse('gardens:login'))
+        self.assertEqual(delete_resp.url, reverse('gardens:login'))
+        self.assertTrue(Garden.objects.filter(id=garden.id).exists())
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
