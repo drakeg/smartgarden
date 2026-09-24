@@ -334,9 +334,20 @@ curl -H "Authorization: Token <your-token>" http://localhost:8000/api/global-not
 
 The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`.
 
+## Development standards
+
+Project development follows documented sprint, coding, testing, and review standards:
+
+- [Contributing](CONTRIBUTING.md)
+- [Sprint process and baseline history](docs/SPRINTS.md)
+- [Coding standards](docs/CODING_STANDARDS.md)
+- [Development workflow](docs/DEVELOPMENT_WORKFLOW.md)
+
+These documents are part of the project definition of done and should be updated whenever the development process changes.
+
 ## Contributing
-- Create a branch for your change, keep commits focused, and open a PR when ready.
-- Run tests and ensure `collectstatic` is used if you change static assets.
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md). Keep changes focused, include tests for behavior changes, update documentation in the same PR, and require green CI before merge.
 
 ## Troubleshooting
 
