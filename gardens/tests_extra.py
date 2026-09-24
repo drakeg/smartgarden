@@ -439,6 +439,52 @@ class ExtraTests(TestCase):
 
         self.assertEqual(resp.status_code, 404)
 
+    def test_garden_list_shows_summary_counts_and_visibility(self):
+        user = user_model.objects.create_user(username='listowner', password='pass')
+        garden = user.gardens.create(name='Summary Garden', is_public=True)
+        statuses = [
+            PodStatus.EMPTY,
+            PodStatus.SEEDED,
+            PodStatus.GROWING,
+            PodStatus.HARVESTING,
+            PodStatus.REMOVED,
+        ]
+        for position, status in enumerate(statuses, start=1):
+            garden.pods.create(position=position, status=status)
+
+        self.client.force_login(user)
+        resp = self.client.get(reverse('gardens:garden_list'))
+
+        self.assertEqual(resp.status_code, 200)
+        summaries = resp.context['garden_summaries']
+        self.assertEqual(len(summaries), 1)
+        summary = summaries[0]
+        self.assertEqual(summary['garden'], garden)
+        self.assertEqual(summary['total_count'], 5)
+        self.assertEqual(summary['active_count'], 3)
+        self.assertEqual(summary['harvesting_count'], 1)
+        self.assertIsNotNone(summary['latest_update'])
+        self.assertContains(resp, 'Summary Garden')
+        self.assertContains(resp, 'Public')
+        self.assertContains(resp, 'Active')
+        self.assertContains(resp, 'Harvesting')
+
+    def test_garden_list_only_summarizes_current_users_gardens(self):
+        owner = user_model.objects.create_user(username='listowner2', password='pass')
+        other = user_model.objects.create_user(username='listother2', password='pass')
+        mine = owner.gardens.create(name='Mine')
+        mine.pods.create(position=1, status=PodStatus.GROWING)
+        theirs = other.gardens.create(name='Theirs')
+        theirs.pods.create(position=1, status=PodStatus.HARVESTING)
+
+        self.client.force_login(owner)
+        resp = self.client.get(reverse('gardens:garden_list'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Mine')
+        self.assertNotContains(resp, 'Theirs')
+        self.assertEqual(len(resp.context['garden_summaries']), 1)
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
