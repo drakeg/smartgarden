@@ -174,4 +174,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/public-garden-snapshot`
 
+**Status:** Complete — merged in PR #23.
+
+
+### Sprint 5 — Garden List Summaries
+
+**Outcome:** Make the My Gardens page useful as a dashboard when an account has multiple gardens.
+
+**Acceptance criteria:**
+- Each garden card shows total pod count, active pod count, and harvesting pod count.
+- Active excludes Empty and Removed pods.
+- Each card shows whether the garden is Public or Private.
+- Each card shows the latest pod activity timestamp when available.
+- Summary data is calculated only for gardens owned by the authenticated user.
+- The view prefetches pods to avoid per-card pod queries.
+- Automated tests verify counts, visibility, and owner isolation.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/garden-list-summaries`
+
 **Status:** In review.
