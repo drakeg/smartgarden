@@ -22,11 +22,12 @@ This file captures follow-up ideas and work items from the recent refactors, acc
    - Root cause: development generated a new `SECRET_KEY` on every startup, invalidating Django's signed database-session payloads after restarts.
    - Development now uses a stable development-only key; production requires an explicit `SECRET_KEY`, with recovery guidance documented.
 
-7. Re-run full test suite and fix failures/warnings
-   - Execute `python3 manage.py test --verbosity=2` and resolve any failures or warnings observed (session warnings, template warnings).
+7. ✅ Re-run full test suite and fix failures/warnings
+   - Latest main CI passes the full Django suite; the prior session warning is resolved.
+   - CI now supplies an explicit test `SECRET_KEY`, creates `staticfiles/` before Django initializes WhiteNoise, and runs `manage.py check` before migrations/tests.
 
-8. Commit and push changes with clear message
-   - Commit all changes in a focused commit and push to a new branch (e.g., `feature/registration-accessibility`).
+8. ✅ Commit and push changes with clear message
+   - Follow-up work is being delivered through focused feature/fix branches and reviewed pull requests.
 
 ---
 
