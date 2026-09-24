@@ -667,8 +667,20 @@ def garden_toggle_public(request, garden_id: int):
 @require_http_methods(["GET"])
 def garden_public(request, share_slug: str):
     garden = get_object_or_404(Garden, share_slug=share_slug, is_public=True)
-    pods = list(garden.pods.all())
-    return render(request, "gardens/garden_public.html", {"garden": garden, "pods": pods})
+    pods = list(garden.pods.all().order_by("position"))
+    status_overview = [
+        {
+            "value": value,
+            "label": label,
+            "count": sum(1 for pod in pods if pod.status == value),
+        }
+        for value, label in PodStatus.choices
+    ]
+    return render(request, "gardens/garden_public.html", {
+        "garden": garden,
+        "pods": pods,
+        "status_overview": status_overview,
+    })
 
 # ---------------------------
 # Export / Import (Account-only)
