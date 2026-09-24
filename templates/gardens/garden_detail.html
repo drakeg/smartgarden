@@ -25,6 +25,15 @@
       Back
     </a>
 
+    {% if not is_guest %}
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'gardens:garden_edit' garden.id %}">
+        Edit Garden
+      </a>
+      <a class="btn btn-outline-danger btn-sm" href="{% url 'gardens:garden_delete' garden.id %}">
+        Delete Garden
+      </a>
+    {% endif %}
+
     <a class="btn btn-outline-primary btn-sm" href="{% url 'gardens:garden_export_json' garden.id %}">
       Export JSON
     </a>
