@@ -361,6 +361,49 @@ class ExtraTests(TestCase):
         pod.refresh_from_db()
         self.assertEqual(pod.plant_name, 'Parsley')
 
+    def test_garden_detail_shows_status_overview_counts(self):
+        user = user_model.objects.create_user(username='overviewowner', password='pass')
+        garden = user.gardens.create(name='Overview Garden')
+        statuses = [
+            PodStatus.EMPTY,
+            PodStatus.SEEDED,
+            PodStatus.SPROUTED,
+            PodStatus.GROWING,
+            PodStatus.GROWING,
+            PodStatus.HARVESTING,
+            PodStatus.REMOVED,
+        ]
+        for position, status in enumerate(statuses, start=1):
+            garden.pods.create(position=position, status=status)
+
+        self.client.force_login(user)
+        resp = self.client.get(reverse('gardens:garden_detail', args=[garden.id]))
+
+        self.assertEqual(resp.status_code, 200)
+        overview = {item['value']: item['count'] for item in resp.context['status_overview']}
+        self.assertEqual(overview[PodStatus.EMPTY], 1)
+        self.assertEqual(overview[PodStatus.SEEDED], 1)
+        self.assertEqual(overview[PodStatus.SPROUTED], 1)
+        self.assertEqual(overview[PodStatus.GROWING], 2)
+        self.assertEqual(overview[PodStatus.HARVESTING], 1)
+        self.assertEqual(overview[PodStatus.REMOVED], 1)
+        self.assertContains(resp, 'Pod Status Overview')
+        self.assertContains(resp, '7 total pods')
+
+    def test_guest_garden_detail_also_shows_status_overview(self):
+        self.client.get(reverse('gardens:guest_start'))
+        garden = Garden.objects.get(is_guest=True)
+        garden.pods.filter(position=1).update(status=PodStatus.GROWING)
+        garden.pods.filter(position=2).update(status=PodStatus.HARVESTING)
+
+        resp = self.client.get(reverse('gardens:garden_detail', args=[garden.id]))
+
+        self.assertEqual(resp.status_code, 200)
+        overview = {item['value']: item['count'] for item in resp.context['status_overview']}
+        self.assertEqual(overview[PodStatus.GROWING], 1)
+        self.assertEqual(overview[PodStatus.HARVESTING], 1)
+        self.assertEqual(overview[PodStatus.EMPTY], 10)
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
