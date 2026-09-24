@@ -14,6 +14,8 @@ urlpatterns = [
     path("gardens/", views.garden_list, name="garden_list"),
     path("gardens/new/", views.garden_create, name="garden_create"),
     path("gardens/<int:garden_id>/", views.garden_detail, name="garden_detail"),
+    path("gardens/<int:garden_id>/edit/", views.garden_edit, name="garden_edit"),
+    path("gardens/<int:garden_id>/delete/", views.garden_delete, name="garden_delete"),
 
     # HTMX side panel routes
     path("gardens/<int:garden_id>/pods/<int:position>/panel/", views.pod_panel, name="pod_panel"),
