@@ -158,8 +158,11 @@ Notes:
 Run Django tests with:
 
 ```bash
-python manage.py test
+python manage.py check
+python manage.py test --verbosity=2
 ```
+
+CI also creates the `staticfiles/` directory and supplies a CI-only `SECRET_KEY` so test output stays free of avoidable development-environment warnings.
 
 ## Registration & Account Activation
 
