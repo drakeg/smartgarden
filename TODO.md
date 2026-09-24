@@ -1,6 +1,13 @@
 # TODO — Smart Garden next tasks
 
-This file captures follow-up ideas and work items from the recent refactors, accessibility fixes, registration flow, and test additions.
+This file captures short-lived follow-up items and completed baseline work. Permanent engineering process documentation now lives in:
+
+- `docs/SPRINTS.md`
+- `docs/CODING_STANDARDS.md`
+- `docs/DEVELOPMENT_WORKFLOW.md`
+- `CONTRIBUTING.md`
+
+Completed items below are retained as historical context rather than as the source of development standards.
 
 2. ✅ Add HTML email templates and plain-text fallbacks
    - Added confirmation and welcome templates in both HTML and plain text.
