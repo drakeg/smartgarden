@@ -234,4 +234,24 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/env-port-developer-paywall`
 
+**Status:** Complete — merged in PR #26.
+
+
+### Sprint 8 — Optional Async Email Runtime
+
+**Outcome:** Make the documented Redis-backed Celery email path runnable through Docker Compose without changing the default synchronous behavior.
+
+**Acceptance criteria:**
+- Celery installs with Redis transport support.
+- Development Compose provides optional Redis and Celery worker services under the `async-email` profile.
+- Production Compose provides optional Redis and Celery worker services under the same profile.
+- The web service receives `CELERY_BROKER_URL` from environment configuration.
+- Production Redis persists broker data in a named volume.
+- With no broker configured, synchronous email remains the default.
+- Environment examples document how to enable the profile.
+- Regression tests verify dependency and Compose wiring.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/optional-async-email-runtime`
+
 **Status:** In review.
