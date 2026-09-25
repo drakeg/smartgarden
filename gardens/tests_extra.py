@@ -485,6 +485,67 @@ class ExtraTests(TestCase):
         self.assertNotContains(resp, 'Theirs')
         self.assertEqual(len(resp.context['garden_summaries']), 1)
 
+    def test_login_claims_guest_garden_and_preserves_history(self):
+        user = user_model.objects.create_user(username='claimlogin', password='pass')
+        self.client.get(reverse('gardens:guest_start'))
+        garden = Garden.objects.get(is_guest=True)
+        pod = garden.pods.first()
+        pod.plant_name = 'Basil'
+        pod.save(update_fields=['plant_name'])
+        note = pod.notes.create(note='Guest history')
+
+        resp = self.client.post(reverse('gardens:login'), {
+            'username': 'claimlogin',
+            'password': 'pass',
+        })
+
+        self.assertRedirects(resp, reverse('gardens:garden_list'))
+        garden.refresh_from_db()
+        self.assertEqual(garden.owner, user)
+        self.assertFalse(garden.is_guest)
+        self.assertEqual(garden.guest_token, '')
+        pod.refresh_from_db()
+        self.assertEqual(pod.plant_name, 'Basil')
+        self.assertTrue(pod.notes.filter(id=note.id, note='Guest history').exists())
+        self.assertIn(views_module.GUEST_COOKIE_NAME, resp.cookies)
+        self.assertEqual(resp.cookies[views_module.GUEST_COOKIE_NAME]['max-age'], 0)
+
+    def test_registration_claims_guest_garden(self):
+        self.client.get(reverse('gardens:guest_start'))
+        garden = Garden.objects.get(is_guest=True)
+
+        resp = self.client.post(reverse('gardens:register'), {
+            'username': 'claimregister',
+            'email': 'claim@example.com',
+            'password1': 'A-strong-password-12345',
+            'password2': 'A-strong-password-12345',
+        })
+
+        self.assertRedirects(resp, reverse('gardens:garden_list'))
+        user = user_model.objects.get(username='claimregister')
+        garden.refresh_from_db()
+        self.assertEqual(garden.owner, user)
+        self.assertFalse(garden.is_guest)
+        self.assertEqual(garden.guest_token, '')
+
+    def test_login_without_guest_cookie_does_not_claim_unrelated_guest_garden(self):
+        user = user_model.objects.create_user(username='noclaim', password='pass')
+        unrelated = Garden.objects.create(
+            is_guest=True,
+            guest_token='different-browser-token',
+            name='Other Guest',
+        )
+
+        resp = self.client.post(reverse('gardens:login'), {
+            'username': 'noclaim',
+            'password': 'pass',
+        })
+
+        self.assertRedirects(resp, reverse('gardens:garden_list'))
+        unrelated.refresh_from_db()
+        self.assertIsNone(unrelated.owner)
+        self.assertTrue(unrelated.is_guest)
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
