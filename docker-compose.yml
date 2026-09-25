@@ -14,7 +14,34 @@ services:
       - DEBUG=True
       - SECRET_KEY=replace-me
       - ALLOWED_HOSTS=localhost,127.0.0.1
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-}
+      - CELERY_TASK_ALWAYS_EAGER=${CELERY_TASK_ALWAYS_EAGER:-False}
     depends_on: []
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["async-email"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  celery-worker:
+    build: .
+    profiles: ["async-email"]
+    command: celery -A smartgarden worker --loglevel=info
+    volumes:
+      - .:/app:cached
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=replace-me
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_TASK_ALWAYS_EAGER=False
+    depends_on:
+      redis:
+        condition: service_healthy
 
   # Optional Postgres service (uncomment to use Postgres in development)
   # db:
