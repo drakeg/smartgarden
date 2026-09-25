@@ -510,6 +510,7 @@ class ExtraTests(TestCase):
         self.assertIn(views_module.GUEST_COOKIE_NAME, resp.cookies)
         self.assertEqual(resp.cookies[views_module.GUEST_COOKIE_NAME]['max-age'], 0)
 
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend")
     def test_registration_claims_guest_garden(self):
         self.client.get(reverse('gardens:guest_start'))
         garden = Garden.objects.get(is_guest=True)
