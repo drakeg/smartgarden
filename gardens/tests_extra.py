@@ -517,8 +517,8 @@ class ExtraTests(TestCase):
         resp = self.client.post(reverse('gardens:register'), {
             'username': 'claimregister',
             'email': 'claim@example.com',
-            'password1': 'A-strong-password-12345',
-            'password2': 'A-strong-password-12345',
+            'password1': 'complexpass123',
+            'password2': 'complexpass123',
         })
 
         self.assertRedirects(resp, reverse('gardens:garden_list'))
