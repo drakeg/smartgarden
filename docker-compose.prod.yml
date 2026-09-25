@@ -10,6 +10,7 @@ services:
     env_file: .env.prod
     environment:
       - DJANGO_SETTINGS_MODULE=smartgarden.settings
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-}
     volumes:
       - staticfiles:/app/staticfiles
     depends_on:
@@ -37,6 +38,34 @@ services:
       retries: 5
     restart: always
 
+  redis:
+    image: redis:7-alpine
+    profiles: ["async-email"]
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  celery-worker:
+    build: .
+    profiles: ["async-email"]
+    command: celery -A smartgarden worker --loglevel=info
+    env_file: .env.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=smartgarden.settings
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
   nginx:
     image: nginx:stable
     ports:
@@ -51,3 +80,4 @@ services:
 volumes:
   staticfiles:
   pgdata:
+  redisdata:

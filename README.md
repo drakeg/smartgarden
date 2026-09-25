@@ -243,19 +243,30 @@ Do not enable both `EMAIL_USE_TLS` and `EMAIL_USE_SSL` at the same time. Provide
 
 ### Optional Celery email delivery
 
-Registration and welcome emails are sent synchronously by default. To queue them through Celery instead, configure a broker:
+Registration and welcome emails are sent synchronously by default. The Docker Compose files include an optional `async-email` profile with Redis and a Celery worker.
+
+For development, add this to `.env`:
 
 ```ini
-CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_TASK_ALWAYS_EAGER=False
 ```
 
-Then start a worker from the project root:
+Then start the optional services with:
 
 ```bash
-celery -A smartgarden worker --loglevel=info
+docker compose --profile async-email up --build
 ```
 
-When `CELERY_BROKER_URL` is unset or empty, Smart Garden does not require a running worker and sends email directly from the web process. This keeps local development and simple deployments unchanged.
+For production, add the same broker URL to `.env.prod` and run:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml --profile async-email up -d --build
+```
+
+The project installs Celery with Redis transport support. Production Redis uses append-only persistence in the `redisdata` volume.
+
+When `CELERY_BROKER_URL` is unset or empty, the Redis and worker services are not required and Smart Garden sends registration/welcome emails synchronously from the web process.
 
 For test/dev environments you can also force Celery tasks to execute eagerly:
 
