@@ -254,4 +254,24 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/optional-async-email-runtime`
 
+**Status:** Complete — merged in PR #27.
+
+
+### Sprint 9 — Guest Garden Account Claim
+
+**Outcome:** Preserve guest progress when a visitor creates or signs into an account.
+
+**Acceptance criteria:**
+- A guest garden tied to the current browser token is transferred to the authenticated user after login.
+- Immediate registration claims the current guest garden.
+- Email-confirmation activation claims the current guest garden after the account is activated.
+- Claimed gardens clear guest ownership metadata and become normal account gardens.
+- Existing pods, plant data, notes, and photos remain attached through the claim.
+- The guest cookie is cleared after a successful claim.
+- A user without the matching guest cookie cannot claim another browser's guest garden.
+- Automated tests cover login, registration, history preservation, and token isolation.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/claim-guest-garden`
+
 **Status:** In review.
