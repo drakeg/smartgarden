@@ -547,6 +547,58 @@ class ExtraTests(TestCase):
         self.assertIsNone(unrelated.owner)
         self.assertTrue(unrelated.is_guest)
 
+    def test_garden_list_filters_by_name_and_visibility(self):
+        user = user_model.objects.create_user(username='filterowner', password='pass')
+        user.gardens.create(name='Kitchen Herbs', is_public=True)
+        user.gardens.create(name='Office Greens', is_public=False)
+        user.gardens.create(name='Kitchen Lettuce', is_public=False)
+
+        self.client.force_login(user)
+
+        resp = self.client.get(reverse('gardens:garden_list'), {
+            'q': 'Kitchen',
+            'visibility': 'private',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Kitchen Lettuce')
+        self.assertNotContains(resp, 'Kitchen Herbs')
+        self.assertNotContains(resp, 'Office Greens')
+        self.assertEqual(resp.context['query'], 'Kitchen')
+        self.assertEqual(resp.context['visibility'], 'private')
+        self.assertEqual(resp.context['filtered_count'], 1)
+
+    def test_garden_list_filtering_remains_owner_scoped(self):
+        owner = user_model.objects.create_user(username='filterowner2', password='pass')
+        other = user_model.objects.create_user(username='filterother2', password='pass')
+        owner.gardens.create(name='Shared Name', is_public=True)
+        other.gardens.create(name='Shared Name Other', is_public=True)
+
+        self.client.force_login(owner)
+        resp = self.client.get(reverse('gardens:garden_list'), {
+            'q': 'Shared Name',
+            'visibility': 'public',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Shared Name')
+        self.assertNotContains(resp, 'Shared Name Other')
+        self.assertEqual(resp.context['filtered_count'], 1)
+
+    def test_invalid_visibility_filter_falls_back_to_all(self):
+        user = user_model.objects.create_user(username='filterowner3', password='pass')
+        user.gardens.create(name='Public Garden', is_public=True)
+        user.gardens.create(name='Private Garden', is_public=False)
+
+        self.client.force_login(user)
+        resp = self.client.get(reverse('gardens:garden_list'), {'visibility': 'bogus'})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Public Garden')
+        self.assertContains(resp, 'Private Garden')
+        self.assertEqual(resp.context['visibility'], '')
+        self.assertEqual(resp.context['filtered_count'], 2)
+
     def test_import_export_roundtrip(self):
         user = user_model.objects.create_user(username='impuser', password='pass')
         garden = user.gardens.create(name='ExportGarden', device_type='AHOPEGARDEN_12')
