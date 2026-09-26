@@ -7,6 +7,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 
 ## Features
 - Garden and Pod management (owner and guest modes)
+- Guest gardens automatically transfer into an account after registration, confirmation, or login
 - Account garden lifecycle controls for rename/edit and confirmed deletion
 - SVG and grid layout for pod placement
 - HTMX-powered side panel for quick pod editing

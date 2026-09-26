@@ -52,6 +52,24 @@ def _get_guest_token(request) -> str | None:
         return None
     return tok
 
+def _claim_guest_gardens(request, user) -> int:
+    """Promote guest gardens for this browser token into the authenticated account."""
+    tok = _get_guest_token(request)
+    if not tok:
+        return 0
+
+    claimed = Garden.objects.filter(
+        is_guest=True,
+        guest_token=tok,
+        owner__isnull=True,
+    ).update(
+        owner=user,
+        is_guest=False,
+        guest_token="",
+    )
+    return claimed
+
+
 def _can_edit_garden(request, garden: Garden) -> bool:
     # Logged-in owner
     if request.user.is_authenticated and garden.owner_id == request.user.id:
@@ -236,7 +254,13 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return redirect(GARDEN_LIST)
+            claimed = _claim_guest_gardens(request, user)
+            if claimed:
+                messages.success(request, f"Claimed {claimed} guest garden{'' if claimed == 1 else 's'} into your account.")
+            response = redirect(GARDEN_LIST)
+            if claimed:
+                response.delete_cookie(GUEST_COOKIE_NAME)
+            return response
         return render(request, "gardens/login.html", {"error": "Invalid username or password."})
     return render(request, "gardens/login.html")
 
@@ -273,7 +297,13 @@ def register_view(request):
                 user.save()
                 messages.success(request, "Welcome to Smart Garden — your account is ready.")
                 login(request, user)
-                return redirect(GARDEN_LIST)
+                claimed = _claim_guest_gardens(request, user)
+                if claimed:
+                    messages.success(request, "Your guest garden was added to your new account.")
+                response = redirect(GARDEN_LIST)
+                if claimed:
+                    response.delete_cookie(GUEST_COOKIE_NAME)
+                return response
     else:
         form = RegistrationForm()
 
@@ -303,7 +333,13 @@ def confirm_registration(request, token: str):
             )
 
         login(request, user)
-        return render(request, 'gardens/confirm_success.html', {'user': user})
+        claimed = _claim_guest_gardens(request, user)
+        if claimed:
+            messages.success(request, "Your guest garden was added to your account.")
+        response = render(request, 'gardens/confirm_success.html', {'user': user})
+        if claimed:
+            response.delete_cookie(GUEST_COOKIE_NAME)
+        return response
     except signing.SignatureExpired:
         messages.error(request, 'Confirmation link has expired. Please register again.')
         return redirect('gardens:register')
