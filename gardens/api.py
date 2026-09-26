@@ -94,6 +94,12 @@ class PodViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('You can only add pods to your own account gardens.')
         serializer.save()
 
+    def perform_update(self, serializer):
+        garden = serializer.validated_data.get('garden', serializer.instance.garden)
+        if garden.owner_id != self.request.user.id or garden.is_guest:
+            raise PermissionDenied('You can only move pods within your own account gardens.')
+        serializer.save()
+
 
 class PodNoteViewSet(viewsets.ModelViewSet):
     serializer_class = PodNoteSerializer
@@ -113,6 +119,12 @@ class PodNoteViewSet(viewsets.ModelViewSet):
         pod = serializer.validated_data['pod']
         if pod.garden.owner_id != self.request.user.id or pod.garden.is_guest:
             raise PermissionDenied('You can only add notes to pods in your own account gardens.')
+        serializer.save()
+
+    def perform_update(self, serializer):
+        pod = serializer.validated_data.get('pod', serializer.instance.pod)
+        if pod.garden.owner_id != self.request.user.id or pod.garden.is_guest:
+            raise PermissionDenied('You can only move notes within your own account gardens.')
         serializer.save()
 
 
