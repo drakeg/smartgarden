@@ -356,6 +356,8 @@ The DRF router also provides endpoints for gardens, pods and pod-notes under `/a
 
 Garden, pod, and pod-note API endpoints require authentication and are scoped to the signed-in user's non-guest gardens. Cross-user objects are not exposed through those endpoints. Global notes remain publicly readable, but only their author can update or delete them.
 
+Pod and pod-note API updates also validate the destination parent: records may be moved only between the authenticated user's own non-guest gardens. Attempts to assign records to another user's or a guest garden are rejected.
+
 ### Optional developer API paywall
 
 Smart Garden has a provider-neutral developer entitlement gate. It is disabled by default.
