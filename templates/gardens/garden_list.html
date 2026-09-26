@@ -7,6 +7,41 @@
   <a class="btn btn-outline-primary" href="{% url 'gardens:garden_import_json' %}">Import</a>
 </div>
 
+<form method="get" class="card shadow-sm rounded-4 mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-6">
+        <label class="form-label small fw-semibold" for="garden-search">Search gardens</label>
+        <input
+          id="garden-search"
+          class="form-control"
+          type="search"
+          name="q"
+          value="{{ query }}"
+          placeholder="Search by garden name"
+        >
+      </div>
+      <div class="col-8 col-md-3">
+        <label class="form-label small fw-semibold" for="garden-visibility">Visibility</label>
+        <select id="garden-visibility" class="form-select" name="visibility">
+          <option value="">All</option>
+          <option value="public" {% if visibility == "public" %}selected{% endif %}>Public</option>
+          <option value="private" {% if visibility == "private" %}selected{% endif %}>Private</option>
+        </select>
+      </div>
+      <div class="col-4 col-md-3 d-flex gap-2">
+        <button class="btn btn-primary flex-grow-1" type="submit">Filter</button>
+        {% if query or visibility %}
+          <a class="btn btn-outline-secondary" href="{% url 'gardens:garden_list' %}">Clear</a>
+        {% endif %}
+      </div>
+    </div>
+    {% if query or visibility %}
+      <div class="muted small mt-2">{{ filtered_count }} matching garden{{ filtered_count|pluralize }}</div>
+    {% endif %}
+  </div>
+</form>
+
 {% if user.is_authenticated %}
   <div class="card mb-3">
     <div class="card-body">
@@ -75,7 +110,11 @@
     {% endwith %}
   {% empty %}
     <div class="col-12">
-      <div class="alert alert-info">No gardens yet. Create one.</div>
+      {% if query or visibility %}
+        <div class="alert alert-info">No gardens match the current filters.</div>
+      {% else %}
+        <div class="alert alert-info">No gardens yet. Create one.</div>
+      {% endif %}
     </div>
   {% endfor %}
 </div>
