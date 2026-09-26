@@ -115,6 +115,64 @@ class ApiTests(APITestCase):
         }, format='json')
         self.assertEqual(note_resp.status_code, 403)
 
+    def test_pod_reparenting_rejects_other_users_and_guest_gardens(self):
+        other = user_model.objects.create_user(username='moveother', password='pass')
+        source = Garden.objects.create(owner=self.user, name='Source')
+        target = Garden.objects.create(owner=self.user, name='Target')
+        foreign = Garden.objects.create(owner=other, name='Foreign')
+        guest = Garden.objects.create(is_guest=True, guest_token='guest-move', name='Guest')
+        pod = source.pods.create(position=1, plant_name='Basil')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        for garden in (foreign, guest):
+            resp = self.client.patch(
+                f'/api/pods/{pod.id}/', {'garden': garden.id}, format='json',
+            )
+            self.assertEqual(resp.status_code, 403)
+            pod.refresh_from_db()
+            self.assertEqual(pod.garden_id, source.id)
+
+        resp = self.client.patch(
+            f'/api/pods/{pod.id}/',
+            {'garden': target.id, 'plant_name': 'Moved basil'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        pod.refresh_from_db()
+        self.assertEqual(pod.garden_id, target.id)
+        self.assertEqual(pod.plant_name, 'Moved basil')
+
+    def test_pod_note_reparenting_rejects_other_users_and_guest_gardens(self):
+        other = user_model.objects.create_user(username='noteothermove', password='pass')
+        source = Garden.objects.create(owner=self.user, name='Source')
+        target = Garden.objects.create(owner=self.user, name='Target')
+        foreign = Garden.objects.create(owner=other, name='Foreign')
+        guest = Garden.objects.create(is_guest=True, guest_token='guest-note-move', name='Guest')
+        original_pod = source.pods.create(position=1)
+        own_pod = target.pods.create(position=1)
+        foreign_pod = foreign.pods.create(position=1)
+        guest_pod = guest.pods.create(position=1)
+        note = original_pod.notes.create(note='Private history')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        for pod in (foreign_pod, guest_pod):
+            resp = self.client.patch(
+                f'/api/pod-notes/{note.id}/', {'pod': pod.id}, format='json',
+            )
+            self.assertEqual(resp.status_code, 403)
+            note.refresh_from_db()
+            self.assertEqual(note.pod_id, original_pod.id)
+
+        resp = self.client.patch(
+            f'/api/pod-notes/{note.id}/',
+            {'pod': own_pod.id, 'note': 'Moved history'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(note.pod_id, own_pod.id)
+        self.assertEqual(note.note, 'Moved history')
+
     def test_global_note_update_and_delete_are_author_only(self):
         other = user_model.objects.create_user(username='noteother', password='pass')
         note = GlobalNote.objects.create(author=other, title='Other', note='Read only')
