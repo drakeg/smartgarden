@@ -274,4 +274,25 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/claim-guest-garden`
 
+**Status:** Complete — merged in PR #29.
+
+
+### Sprint 10 — Garden Search and Filters
+
+**Outcome:** Make larger garden collections easy to navigate from My Gardens.
+
+**Acceptance criteria:**
+- My Gardens supports case-insensitive name search through the `q` query parameter.
+- Users can filter by Public or Private sharing state.
+- Search and visibility filters can be combined.
+- Invalid visibility values safely fall back to showing all sharing states.
+- Filtering remains scoped to gardens owned by the authenticated user.
+- Existing pod summary prefetch/count behavior remains intact.
+- The UI shows active filter values, a matching result count, and a clear-filter action.
+- Empty filtered results are distinguished from an account with no gardens.
+- Automated tests cover combined filters, owner isolation, and invalid values.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/garden-search-filters`
+
 **Status:** In review.

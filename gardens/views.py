@@ -412,8 +412,21 @@ def garden_list(request):
     else:
         form = GlobalNoteForm()
 
+    query = request.GET.get("q", "").strip()
+    visibility = request.GET.get("visibility", "").strip().lower()
+    if visibility not in ("public", "private"):
+        visibility = ""
+
+    gardens_qs = Garden.objects.filter(owner=request.user)
+    if query:
+        gardens_qs = gardens_qs.filter(name__icontains=query)
+    if visibility == "public":
+        gardens_qs = gardens_qs.filter(is_public=True)
+    elif visibility == "private":
+        gardens_qs = gardens_qs.filter(is_public=False)
+
     gardens = list(
-        Garden.objects.filter(owner=request.user)
+        gardens_qs
         .prefetch_related("pods")
         .order_by("-created_at")
     )
@@ -440,6 +453,9 @@ def garden_list(request):
         "garden_summaries": garden_summaries,
         "notes": notes,
         "form": form,
+        "query": query,
+        "visibility": visibility,
+        "filtered_count": len(gardens),
     })
 
 @require_http_methods(["GET", "POST"])
