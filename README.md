@@ -16,6 +16,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - Garden-level pod status overview with counts for each growth state
 - Read-only public garden snapshots with pod status/age while keeping notes and photos private
 - My Gardens dashboard summaries for active, harvesting, total pods, sharing state, and latest activity
+- Server-side My Gardens search and Public/Private filtering
 - Clean front/back visual overlays on garden detail
 
 ## Prerequisites
