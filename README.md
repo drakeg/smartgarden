@@ -266,7 +266,7 @@ For production, add the same broker URL to `.env.prod` and run:
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile async-email up -d --build
 ```
 
-The project installs Celery with Redis transport support. Production Redis uses append-only persistence in the `redisdata` volume.
+The project installs Celery with Redis transport support. Production Redis uses append-only persistence in the `redisdata` volume. The Compose runtime uses Redis 8 Alpine for both development and production async-email profiles.
 
 When `CELERY_BROKER_URL` is unset or empty, the Redis and worker services are not required and Smart Garden sends registration/welcome emails synchronously from the web process.
 
