@@ -313,4 +313,21 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `security/api-parent-reassignment`
 
+**Status:** Complete — merged in PR #31.
+
+
+### Sprint 12 — Redis 8 Runtime Refresh
+
+**Outcome:** Refresh the optional async-email broker runtime to Redis 8 on the latest main branch without carrying forward a stale dependency PR.
+
+**Acceptance criteria:**
+- Development async-email Compose profile uses `redis:8-alpine`.
+- Production async-email Compose profile uses `redis:8-alpine`.
+- Existing Redis health checks, persistence, and Celery broker wiring remain unchanged.
+- Regression tests ensure both Compose files stay on Redis 8 and do not drift back to Redis 7.
+- README documents the Redis 8 runtime.
+- The stale Renovate Redis 8 PR is superseded by the fresh current-main PR.
+
+**Branch:** `maintenance/redis-8-refresh`
+
 **Status:** In review.

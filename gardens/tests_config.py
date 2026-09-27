@@ -33,3 +33,13 @@ class DockerConfigurationTests(SimpleTestCase):
             self.assertIn("celery-worker:", compose)
             self.assertIn("redis:", compose)
             self.assertIn("CELERY_BROKER_URL=", compose)
+
+
+    def test_compose_uses_redis_8_consistently(self):
+        dev_compose = (Path(settings.BASE_DIR) / "docker-compose.yml").read_text()
+        prod_compose = (Path(settings.BASE_DIR) / "docker-compose.prod.yml").read_text()
+
+        self.assertIn("image: redis:8-alpine", dev_compose)
+        self.assertIn("image: redis:8-alpine", prod_compose)
+        self.assertNotIn("image: redis:7-alpine", dev_compose)
+        self.assertNotIn("image: redis:7-alpine", prod_compose)
