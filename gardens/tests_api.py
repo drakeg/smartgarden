@@ -1,13 +1,14 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import DeveloperAccess, DeveloperAccessStatus, Garden, GlobalNote, Pod
+from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperPlan, Garden, GlobalNote, Pod
 
 user_model = get_user_model()
 
@@ -254,6 +255,93 @@ class ApiTests(APITestCase):
         resp = self.client.get('/api/global-notes/')
 
         self.assertIn(resp.status_code, (401, 403))
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '2/minute',
+            'PRO': '4/minute',
+            'ENTERPRISE': '6/minute',
+        },
+    )
+    def test_starter_plan_is_throttled_at_configured_limit(self):
+        cache.clear()
+        DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.STARTER,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        Garden.objects.create(owner=self.user, name='Rate Limited')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+        limited = self.client.get('/api/gardens/')
+
+        self.assertEqual(limited.status_code, 429)
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '1/minute',
+            'PRO': '3/minute',
+            'ENTERPRISE': '5/minute',
+        },
+    )
+    def test_pro_plan_allows_more_requests_than_starter(self):
+        cache.clear()
+        access = DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.PRO,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        for _ in range(3):
+            self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 429)
+
+        cache.clear()
+        access.plan = DeveloperPlan.STARTER
+        access.save(update_fields=['plan'])
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 429)
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '1/minute',
+            'PRO': '1/minute',
+            'ENTERPRISE': '1/minute',
+        },
+    )
+    def test_staff_bypasses_developer_rate_limits(self):
+        cache.clear()
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        DeveloperAccess.objects.create(
+            user=self.user,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        for _ in range(3):
+            self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+
+    @override_settings(
+        API_PAYWALL_ENABLED=False,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '1/minute',
+            'PRO': '1/minute',
+            'ENTERPRISE': '1/minute',
+        },
+    )
+    def test_rate_limits_are_disabled_with_paywall(self):
+        cache.clear()
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        for _ in range(3):
+            self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
 
     def test_openapi_schema_and_docs_available(self):
         # schema JSON
