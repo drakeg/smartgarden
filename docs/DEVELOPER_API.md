@@ -45,6 +45,26 @@ Access is granted only when status is `Active` and the optional expiration time 
 
 Administrators can manage these records in Django admin.
 
+## Plan-based request limits
+
+When `API_PAYWALL_ENABLED=True`, active developer accounts are throttled per user according to their plan. Defaults are:
+
+- Starter: `100/hour`
+- Pro: `1000/hour`
+- Enterprise: `5000/hour`
+
+Override the defaults through environment variables:
+
+```ini
+API_RATE_STARTER=100/hour
+API_RATE_PRO=1000/hour
+API_RATE_ENTERPRISE=5000/hour
+```
+
+Django REST Framework accepts rate strings such as `60/minute`, `1000/hour`, or `10000/day`.
+
+Rate limiting is disabled when the developer paywall is disabled. Staff and superusers bypass plan throttling for administration and support. Throttle counters are per authenticated user and per plan, so changing a user's plan immediately applies that plan's rate bucket.
+
 ## Billing-provider integration
 
 The entitlement model deliberately does not depend on a billing vendor. A billing integration should treat the payment provider as the source of billing events and Smart Garden as the source of API authorization.
@@ -73,7 +93,6 @@ A future billing sprint can add:
 - billing portal/customer self-service;
 - signed webhook processing;
 - automatic entitlement synchronization;
-- request quotas/rate limits by plan;
 - API usage metering;
 - developer dashboard for token and subscription status.
 
@@ -88,4 +107,4 @@ A safe rollout sequence is:
 3. Validate API calls with active, inactive, past-due, and expired accounts.
 4. Integrate billing webhooks.
 5. Enable `API_PAYWALL_ENABLED=True` in production.
-6. Add plan-specific quotas/rate limits before broadly marketing the API.
+6. Tune `API_RATE_STARTER`, `API_RATE_PRO`, and `API_RATE_ENTERPRISE` to match the commercial plans before broadly marketing the API.
