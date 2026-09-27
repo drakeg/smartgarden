@@ -295,4 +295,22 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/garden-search-filters`
 
+**Status:** Complete — merged in PR #30.
+
+
+### Sprint 11 — API Parent Reassignment Authorization
+
+**Outcome:** Prevent authenticated API callers from moving existing pods or notes into gardens they do not own.
+
+**Acceptance criteria:**
+- API pod updates reject garden reassignment to another user's or a guest garden.
+- API pod-note updates reject reassignment to a pod in another user's or a guest garden.
+- Rejected updates leave parent relationships and existing data unchanged.
+- Reassignment between the caller's own account gardens or pods remains supported.
+- Existing create-time ownership restrictions remain intact.
+- Regression tests cover rejected cross-user/guest moves and valid owner moves.
+- README and sprint documentation are updated.
+
+**Branch:** `security/api-parent-reassignment`
+
 **Status:** In review.
