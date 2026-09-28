@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -342,6 +342,31 @@ class ApiTests(APITestCase):
 
         for _ in range(3):
             self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '2/minute',
+            'PRO': '4/minute',
+            'ENTERPRISE': '6/minute',
+        },
+    )
+    def test_rate_limit_is_shared_across_api_endpoints(self):
+        caches['developer_api'].clear()
+        DeveloperAccess.objects.create(
+            user=self.user, status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+        self.assertEqual(self.client.get('/api/pods/').status_code, 200)
+        self.assertEqual(self.client.get('/api/pod-notes/').status_code, 429)
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_throttle_uses_dedicated_cache_alias(self):
+        from .api import DeveloperPlanRateThrottle
+
+        throttle = DeveloperPlanRateThrottle()
+        self.assertIs(throttle.cache, caches['developer_api'])
 
     def test_openapi_schema_and_docs_available(self):
         # schema JSON
