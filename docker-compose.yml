@@ -15,12 +15,13 @@ services:
       - SECRET_KEY=replace-me
       - ALLOWED_HOSTS=localhost,127.0.0.1
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-}
+      - API_THROTTLE_CACHE_URL=${API_THROTTLE_CACHE_URL:-}
       - CELERY_TASK_ALWAYS_EAGER=${CELERY_TASK_ALWAYS_EAGER:-False}
     depends_on: []
 
   redis:
     image: redis:8-alpine
-    profiles: ["async-email"]
+    profiles: ["async-email", "api-paywall"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
