@@ -1,9 +1,56 @@
 from django.conf import settings
 from rest_framework import permissions, viewsets
+from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.exceptions import PermissionDenied
 
 from .models import DeveloperAccess, Garden, GlobalNote, Pod, PodNote
 from .serializers import GardenSerializer, GlobalNoteSerializer, PodNoteSerializer, PodSerializer
+
+
+class DeveloperPlanRateThrottle(SimpleRateThrottle):
+    """Apply per-user request limits based on the active developer plan."""
+
+    scope = 'developer-plan'
+
+    def __init__(self):
+        self.rate = None
+        self.num_requests = None
+        self.duration = None
+
+    def allow_request(self, request, view):
+        if not settings.API_PAYWALL_ENABLED:
+            return True
+
+        user = request.user
+        if not user.is_authenticated or user.is_staff or user.is_superuser:
+            return True
+
+        try:
+            access = user.developer_access
+        except DeveloperAccess.DoesNotExist:
+            return True
+
+        if not access.has_access():
+            return True
+
+        rate = settings.API_PLAN_THROTTLE_RATES.get(access.plan)
+        if not rate:
+            return True
+
+        self.rate = rate
+        self.num_requests, self.duration = self.parse_rate(rate)
+        return super().allow_request(request, view)
+
+    def get_cache_key(self, request, view):
+        user = request.user
+        try:
+            plan = user.developer_access.plan.lower()
+        except DeveloperAccess.DoesNotExist:
+            return None
+        return self.cache_format % {
+            'scope': f'{self.scope}-{plan}',
+            'ident': str(user.pk),
+        }
 
 
 class HasDeveloperApiAccess(permissions.BasePermission):
@@ -58,6 +105,7 @@ class IsGlobalNoteAuthorOrReadOnly(permissions.BasePermission):
 
 class GardenViewSet(viewsets.ModelViewSet):
     serializer_class = GardenSerializer
+    throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsGardenOwner]
     filterset_fields = ['device_type', 'is_public']
     search_fields = ['name', 'share_slug']
@@ -76,6 +124,7 @@ class GardenViewSet(viewsets.ModelViewSet):
 
 class PodViewSet(viewsets.ModelViewSet):
     serializer_class = PodSerializer
+    throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsPodGardenOwner]
     filterset_fields = ['garden', 'position', 'status']
     search_fields = ['plant_name']
@@ -103,6 +152,7 @@ class PodViewSet(viewsets.ModelViewSet):
 
 class PodNoteViewSet(viewsets.ModelViewSet):
     serializer_class = PodNoteSerializer
+    throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsPodNoteGardenOwner]
     filterset_fields = ['pod__garden', 'pod__position']
     search_fields = ['note']
@@ -131,6 +181,7 @@ class PodNoteViewSet(viewsets.ModelViewSet):
 class GlobalNoteViewSet(viewsets.ModelViewSet):
     queryset = GlobalNote.objects.all().order_by('-created_at')
     serializer_class = GlobalNoteSerializer
+    throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasDeveloperApiAccess, IsGlobalNoteAuthorOrReadOnly]
     filterset_fields = ['author__username']
     search_fields = ['title', 'note', 'author__username']

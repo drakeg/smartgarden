@@ -330,4 +330,25 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `maintenance/redis-8-refresh`
 
+**Status:** Complete — merged in PR #32.
+
+
+### Sprint 13 — Developer API Plan Rate Limits
+
+**Outcome:** Make Starter, Pro, and Enterprise developer plans operationally distinct by enforcing configurable per-user API request limits.
+
+**Acceptance criteria:**
+- Plan throttling activates only when `API_PAYWALL_ENABLED=True`.
+- Starter, Pro, and Enterprise each have independently configurable rates.
+- Default rates are Starter `100/hour`, Pro `1000/hour`, and Enterprise `5000/hour`.
+- Active developer users receive HTTP 429 after exceeding their plan rate.
+- Higher tiers can sustain more requests when configured with higher rates.
+- Staff and superusers bypass developer throttling.
+- Disabling the paywall also disables plan throttling.
+- Rate configuration is documented in development and production environment examples.
+- Regression tests cover exhaustion, tier differences, staff bypass, and disabled-paywall behavior.
+- README and developer API documentation are updated.
+
+**Branch:** `feature/developer-api-rate-limits`
+
 **Status:** In review.

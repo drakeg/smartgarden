@@ -141,6 +141,12 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # active DeveloperAccess entitlement unless the caller is staff/superuser.
 API_PAYWALL_ENABLED = os.environ.get('API_PAYWALL_ENABLED', 'False').lower() in ('1', 'true', 'yes')
 
+API_PLAN_THROTTLE_RATES = {
+    'STARTER': os.environ.get('API_RATE_STARTER', '100/hour'),
+    'PRO': os.environ.get('API_RATE_PRO', '1000/hour'),
+    'ENTERPRISE': os.environ.get('API_RATE_ENTERPRISE', '5000/hour'),
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
