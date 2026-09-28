@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.cache import caches
 from rest_framework import permissions, viewsets
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.exceptions import PermissionDenied
@@ -13,6 +14,7 @@ class DeveloperPlanRateThrottle(SimpleRateThrottle):
     scope = 'developer-plan'
 
     def __init__(self):
+        self.cache = caches['developer_api']
         self.rate = None
         self.num_requests = None
         self.duration = None
