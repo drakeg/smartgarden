@@ -351,4 +351,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/developer-api-rate-limits`
 
+**Status:** Complete — merged in PR #33.
+
+
+### Sprint 14 — Shared Developer API Throttle Cache
+
+**Outcome:** Use one shared Redis-backed rate-limit counter across production web workers instead of independent in-memory counters.
+
+**Acceptance criteria:**
+- A dedicated developer API cache alias uses Redis when configured.
+- Production with the developer paywall enabled requires a shared cache URL.
+- Development without a cache URL retains local-memory behavior.
+- Redis can be started through an optional `api-paywall` Compose profile.
+- Development and production environment examples document the shared cache URL.
+- Existing per-plan and staff-bypass behavior remains intact.
+- Tests cover dedicated cache use and shared allowance across API endpoints.
+- Developer API docs explain operational rollout and concurrent-throttling limitations.
+
+**Branch:** `fix/shared-developer-api-throttle-cache`
+
 **Status:** In review.
