@@ -63,6 +63,8 @@ API_RATE_ENTERPRISE=5000/hour
 
 Django REST Framework accepts rate strings such as `60/minute`, `1000/hour`, or `10000/day`.
 
+**Production cache:** Set `API_THROTTLE_CACHE_URL=redis://redis:6379/1` and start the Redis service with `docker compose --env-file .env.prod -f docker-compose.prod.yml --profile api-paywall up -d --build`. Redis database 1 keeps throttle keys separate from the optional Celery broker on database 0. Production startup refuses to enable the paywall without a shared cache URL; an in-process cache would give each web worker a separate quota. For a non-Compose deployment, point the URL at a shared Redis instance accessible by every web replica. If Redis is unavailable, API throttling will fail rather than silently falling back to per-process counters. DRF's standard cache throttles are approximate under concurrent requests and are not a hard billing or abuse-protection boundary.
+
 Rate limiting is disabled when the developer paywall is disabled. Staff and superusers bypass plan throttling for administration and support. Throttle counters are per authenticated user and per plan, so changing a user's plan immediately applies that plan's rate bucket.
 
 ## Billing-provider integration
