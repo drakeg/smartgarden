@@ -368,6 +368,8 @@ API_PAYWALL_ENABLED=False
 
 When set to `True`, API viewsets require an active `DeveloperAccess` record. Plans and subscription state are stored independently of any payment processor, so a future Stripe, Paddle, or other billing webhook can activate/suspend access without changing API authentication.
 
+In production, enable the paywall only after configuring `API_THROTTLE_CACHE_URL` to a shared Redis instance. The provided Compose Redis service is available with `--profile api-paywall` (see [developer API documentation](docs/DEVELOPER_API.md)).
+
 Active developer plans are also rate-limited per user. Defaults are Starter `100/hour`, Pro `1000/hour`, and Enterprise `5000/hour`; override them with `API_RATE_STARTER`, `API_RATE_PRO`, and `API_RATE_ENTERPRISE`.
 
 See [Developer API Access and Paywall](docs/DEVELOPER_API.md) for the architecture and rollout plan.

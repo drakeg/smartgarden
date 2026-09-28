@@ -40,7 +40,7 @@ services:
 
   redis:
     image: redis:8-alpine
-    profiles: ["async-email"]
+    profiles: ["async-email", "api-paywall"]
     command: redis-server --appendonly yes
     volumes:
       - redisdata:/data
