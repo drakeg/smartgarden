@@ -141,6 +141,28 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # active DeveloperAccess entitlement unless the caller is staff/superuser.
 API_PAYWALL_ENABLED = os.environ.get('API_PAYWALL_ENABLED', 'False').lower() in ('1', 'true', 'yes')
 
+# Rate limits must share counters across all production web workers/replicas.
+# A local-memory cache would grant each process an independent allowance.
+API_THROTTLE_CACHE_URL = os.environ.get('API_THROTTLE_CACHE_URL', '')
+if API_PAYWALL_ENABLED and not DEBUG and not API_THROTTLE_CACHE_URL:
+    raise ImproperlyConfigured(
+        'Set API_THROTTLE_CACHE_URL to a shared Redis cache before enabling '
+        'the production developer API paywall.'
+    )
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+    'developer_api': {
+        'BACKEND': (
+            'django.core.cache.backends.redis.RedisCache'
+            if API_THROTTLE_CACHE_URL
+            else 'django.core.cache.backends.locmem.LocMemCache'
+        ),
+        **({'LOCATION': API_THROTTLE_CACHE_URL} if API_THROTTLE_CACHE_URL else {}),
+    },
+}
+
 API_PLAN_THROTTLE_RATES = {
     'STARTER': os.environ.get('API_RATE_STARTER', '100/hour'),
     'PRO': os.environ.get('API_RATE_PRO', '1000/hour'),
