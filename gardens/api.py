@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.core.cache import caches
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.authtoken.models import Token
 
 from .models import DeveloperAccess, Garden, GlobalNote, Pod, PodNote
 from .serializers import GardenSerializer, GlobalNoteSerializer, PodNoteSerializer, PodSerializer
@@ -89,6 +90,40 @@ class DeveloperAccessStatusView(APIView):
             'access_expires_at': access.access_expires_at if access else None,
             'request_rate': request_rate,
         })
+
+
+class DeveloperTokenView(APIView):
+    """Inspect, rotate, or revoke the signed-in user's DRF API token."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        token = Token.objects.filter(user=request.user).first()
+        return Response({
+            'has_token': token is not None,
+            'created_at': token.created if token else None,
+        })
+
+    def post(self, request):
+        password = request.data.get('password', '')
+        if not password or not request.user.check_password(password):
+            raise PermissionDenied('Password confirmation failed.')
+
+        Token.objects.filter(user=request.user).delete()
+        token = Token.objects.create(user=request.user)
+        return Response({
+            'token': token.key,
+            'created_at': token.created,
+            'rotated': True,
+        })
+
+    def delete(self, request):
+        password = request.data.get('password', '')
+        if not password or not request.user.check_password(password):
+            raise PermissionDenied('Password confirmation failed.')
+
+        Token.objects.filter(user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class HasDeveloperApiAccess(permissions.BasePermission):
