@@ -68,6 +68,30 @@ This endpoint remains available even when the caller does not have an active dev
 
 Billing provider, customer, and subscription identifiers are intentionally not exposed.
 
+## Developer token lifecycle
+
+The standard `/api-token-auth/` endpoint can issue the account's DRF token after username/password authentication. Authenticated developers can also manage that token at:
+
+```http
+GET /api/developer-token/
+POST /api/developer-token/
+DELETE /api/developer-token/
+```
+
+`GET` reports whether a token exists and when it was created; it never returns the current token value.
+
+`POST` rotates the token and requires the account password again:
+
+```json
+{"password": "current-account-password"}
+```
+
+The old token is deleted immediately and the response returns the replacement token once. Update clients/secrets immediately because calls using the old token will fail after rotation.
+
+`DELETE` revokes the token and also requires password confirmation. The revoked token stops authenticating immediately. A later password-authenticated request to `/api-token-auth/` can issue a new token.
+
+Password confirmation is required even when the management request itself is authenticated with a token, so possession of a stolen API token alone is not enough to rotate or revoke the credential.
+
 ## Plan-based request limits
 
 When `API_PAYWALL_ENABLED=True`, active developer accounts are throttled per user according to their plan. Defaults are:

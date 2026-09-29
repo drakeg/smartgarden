@@ -391,4 +391,25 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/developer-access-status`
 
+**Status:** Complete — merged in PR #35.
+
+
+### Sprint 16 — Developer API Token Lifecycle
+
+**Outcome:** Let authenticated developers inspect, rotate, and revoke their long-lived DRF API token safely.
+
+**Acceptance criteria:**
+- `GET /api/developer-token/` requires authentication and reports only token presence/creation time.
+- Existing token values are never re-displayed by the status endpoint.
+- Token rotation requires password confirmation.
+- Rotation immediately invalidates the previous token and returns the replacement token once.
+- Token revocation requires password confirmation.
+- Revocation immediately invalidates the current token.
+- A stolen API token alone is insufficient to rotate or revoke credentials.
+- The existing password-authenticated `/api-token-auth/` endpoint can issue a token again after revocation.
+- Regression tests cover authentication, non-disclosure, failed confirmation, rotation, and revocation.
+- README and developer API documentation are updated.
+
+**Branch:** `feature/developer-token-lifecycle`
+
 **Status:** In review.
