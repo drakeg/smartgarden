@@ -465,6 +465,88 @@ class ApiTests(APITestCase):
         self.assertTrue(data['effective_access'])
         self.assertIsNone(data['request_rate'])
 
+    def test_developer_token_status_does_not_expose_existing_key(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+        resp = self.client.get('/api/developer-token/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['has_token'])
+        self.assertIsNotNone(data['created_at'])
+        self.assertNotIn('token', data)
+        self.assertNotIn(self.token.key, resp.content.decode())
+
+    def test_developer_token_rotation_requires_password_confirmation(self):
+        old_key = self.token.key
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {old_key}')
+
+        resp = self.client.post(
+            '/api/developer-token/',
+            {'password': 'wrong-password'},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(Token.objects.filter(user=self.user, key=old_key).exists())
+
+    def test_developer_token_rotation_invalidates_old_token(self):
+        old_key = self.token.key
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {old_key}')
+
+        resp = self.client.post(
+            '/api/developer-token/',
+            {'password': 'pass'},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        new_key = resp.json()['token']
+        self.assertNotEqual(new_key, old_key)
+        self.assertFalse(Token.objects.filter(key=old_key).exists())
+        self.assertTrue(Token.objects.filter(user=self.user, key=new_key).exists())
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {old_key}')
+        self.assertIn(self.client.get('/api/developer-access/').status_code, (401, 403))
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {new_key}')
+        self.assertEqual(self.client.get('/api/developer-access/').status_code, 200)
+
+    def test_developer_token_revocation_requires_password_and_invalidates_token(self):
+        old_key = self.token.key
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {old_key}')
+
+        denied = self.client.delete(
+            '/api/developer-token/',
+            {'password': 'wrong-password'},
+            format='json',
+        )
+        self.assertEqual(denied.status_code, 403)
+        self.assertTrue(Token.objects.filter(user=self.user, key=old_key).exists())
+
+        revoked = self.client.delete(
+            '/api/developer-token/',
+            {'password': 'pass'},
+            format='json',
+        )
+        self.assertEqual(revoked.status_code, 204)
+        self.assertFalse(Token.objects.filter(user=self.user).exists())
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {old_key}')
+        self.assertIn(self.client.get('/api/developer-access/').status_code, (401, 403))
+
+    def test_developer_token_lifecycle_requires_authentication(self):
+        self.client.credentials()
+
+        self.assertIn(self.client.get('/api/developer-token/').status_code, (401, 403))
+        self.assertIn(
+            self.client.post('/api/developer-token/', {'password': 'pass'}, format='json').status_code,
+            (401, 403),
+        )
+        self.assertIn(
+            self.client.delete('/api/developer-token/', {'password': 'pass'}, format='json').status_code,
+            (401, 403),
+        )
+
     def test_openapi_schema_and_docs_available(self):
         # schema JSON
         resp = self.client.get('/api/schema/')
