@@ -368,6 +368,103 @@ class ApiTests(APITestCase):
         throttle = DeveloperPlanRateThrottle()
         self.assertIs(throttle.cache, caches['developer_api'])
 
+    def test_developer_access_status_requires_authentication(self):
+        self.client.credentials()
+        resp = self.client.get('/api/developer-access/')
+        self.assertIn(resp.status_code, (401, 403))
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_access_status_reports_missing_entitlement(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+        resp = self.client.get('/api/developer-access/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['paywall_enabled'])
+        self.assertFalse(data['entitlement_present'])
+        self.assertFalse(data['entitlement_active'])
+        self.assertFalse(data['effective_access'])
+        self.assertIsNone(data['plan'])
+        self.assertIsNone(data['status'])
+        self.assertIsNone(data['request_rate'])
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '100/hour',
+            'PRO': '1000/hour',
+            'ENTERPRISE': '5000/hour',
+        },
+    )
+    def test_developer_access_status_reports_active_plan_and_rate(self):
+        access = DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.PRO,
+            status=DeveloperAccessStatus.ACTIVE,
+            billing_provider='example-payments',
+            billing_customer_id='customer-secret',
+            billing_subscription_id='subscription-secret',
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/developer-access/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['entitlement_present'])
+        self.assertTrue(data['entitlement_active'])
+        self.assertTrue(data['effective_access'])
+        self.assertEqual(data['plan'], DeveloperPlan.PRO)
+        self.assertEqual(data['status'], DeveloperAccessStatus.ACTIVE)
+        self.assertEqual(data['request_rate'], '1000/hour')
+        self.assertNotIn('billing_provider', data)
+        self.assertNotIn('billing_customer_id', data)
+        self.assertNotIn('billing_subscription_id', data)
+        self.assertEqual(access.user_id, self.user.id)
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_access_status_reports_expired_entitlement(self):
+        DeveloperAccess.objects.create(
+            user=self.user,
+            status=DeveloperAccessStatus.ACTIVE,
+            access_expires_at=timezone.now() - timedelta(minutes=1),
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/developer-access/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['entitlement_present'])
+        self.assertFalse(data['entitlement_active'])
+        self.assertFalse(data['effective_access'])
+        self.assertIsNone(data['request_rate'])
+
+    @override_settings(API_PAYWALL_ENABLED=False)
+    def test_developer_access_status_reflects_disabled_paywall(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+        resp = self.client.get('/api/developer-access/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data['paywall_enabled'])
+        self.assertTrue(data['effective_access'])
+        self.assertIsNone(data['request_rate'])
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_access_status_reports_staff_bypass(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/developer-access/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['admin_bypass'])
+        self.assertTrue(data['effective_access'])
+        self.assertIsNone(data['request_rate'])
+
     def test_openapi_schema_and_docs_available(self):
         # schema JSON
         resp = self.client.get('/api/schema/')
