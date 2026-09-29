@@ -370,4 +370,25 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `fix/shared-developer-api-throttle-cache`
 
+**Status:** Complete — merged in PR #34.
+
+
+### Sprint 15 — Developer API Access Status
+
+**Outcome:** Give authenticated developers a safe self-service endpoint for understanding their API entitlement and effective rate.
+
+**Acceptance criteria:**
+- `GET /api/developer-access/` requires authentication.
+- The endpoint remains reachable even without an active developer entitlement.
+- Responses report paywall state, entitlement presence/active state, effective access, plan/status, expiration, request rate, and admin bypass.
+- Active plans report their configured effective request rate.
+- Expired/inactive entitlements report no effective paid access.
+- Disabled-paywall mode reports effective access without a paid rate.
+- Staff/superusers report administrative bypass.
+- Billing provider/customer/subscription identifiers are never exposed.
+- Regression tests cover unauthenticated, missing, active, expired, disabled-paywall, staff, and privacy behavior.
+- README and developer API documentation are updated.
+
+**Branch:** `feature/developer-access-status`
+
 **Status:** In review.
