@@ -85,7 +85,7 @@ class ProductionDatabaseConfigurationTests(SimpleTestCase):
         self.assertEqual(config['NAME'], 'urldb')
         self.assertEqual(config['USER'], 'urluser')
         self.assertEqual(config['HOST'], 'urlhost')
-        self.assertEqual(config['PORT'], 5433)
+        self.assertEqual(str(config['PORT']), '5433')
 
     def test_production_database_requires_password_without_database_url(self):
         with patch.object(project_settings, 'DEBUG', False), patch.dict(
