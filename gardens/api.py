@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.core.cache import caches
 from rest_framework import permissions, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.exceptions import PermissionDenied
 
@@ -53,6 +55,40 @@ class DeveloperPlanRateThrottle(SimpleRateThrottle):
             'scope': f'{self.scope}-{plan}',
             'ident': str(user.pk),
         }
+
+
+class DeveloperAccessStatusView(APIView):
+    """Return the signed-in developer's effective API access state."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        admin_bypass = bool(user.is_staff or user.is_superuser)
+
+        try:
+            access = user.developer_access
+        except DeveloperAccess.DoesNotExist:
+            access = None
+
+        entitlement_active = bool(access and access.has_access())
+        paywall_enabled = bool(settings.API_PAYWALL_ENABLED)
+        effective_access = (not paywall_enabled) or admin_bypass or entitlement_active
+        request_rate = None
+        if paywall_enabled and entitlement_active and not admin_bypass:
+            request_rate = settings.API_PLAN_THROTTLE_RATES.get(access.plan)
+
+        return Response({
+            'paywall_enabled': paywall_enabled,
+            'entitlement_present': access is not None,
+            'entitlement_active': entitlement_active,
+            'effective_access': effective_access,
+            'admin_bypass': admin_bypass,
+            'plan': access.plan if access else None,
+            'status': access.status if access else None,
+            'access_expires_at': access.access_expires_at if access else None,
+            'request_rate': request_rate,
+        })
 
 
 class HasDeveloperApiAccess(permissions.BasePermission):
