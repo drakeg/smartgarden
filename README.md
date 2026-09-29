@@ -352,7 +352,7 @@ curl -X POST -d "username=alice&password=secret" http://localhost:8000/api-token
 curl -H "Authorization: Token <your-token>" http://localhost:8000/api/global-notes/
 ```
 
-The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`.
+The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`. Authenticated users can inspect their own developer entitlement and effective API rate at `/api/developer-access/`.
 
 Garden, pod, and pod-note API endpoints require authentication and are scoped to the signed-in user's non-guest gardens. Cross-user objects are not exposed through those endpoints. Global notes remain publicly readable, but only their author can update or delete them.
 
