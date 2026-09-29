@@ -6,6 +6,8 @@ Smart Garden exposes Django REST Framework endpoints under `/api/`. These endpoi
 
 The API currently exposes:
 
+- `/api/developer-access/` — authenticated self-service access/plan status
+
 - `/api/gardens/`
 - `/api/pods/`
 - `/api/pod-notes/`
@@ -44,6 +46,27 @@ Each paid developer account can have one entitlement record with:
 Access is granted only when status is `Active` and the optional expiration time has not passed.
 
 Administrators can manage these records in Django admin.
+
+## Developer access status
+
+Authenticated users can query:
+
+```http
+GET /api/developer-access/
+```
+
+This endpoint remains available even when the caller does not have an active developer entitlement, so it can explain why paid API endpoints are denied. It returns only operational access information:
+
+- whether the developer paywall is enabled;
+- whether an entitlement record exists;
+- whether that entitlement is currently active;
+- whether the caller has effective API access;
+- whether staff/superuser bypass applies;
+- plan and entitlement status;
+- optional access expiration;
+- the effective request rate for an active paid plan.
+
+Billing provider, customer, and subscription identifiers are intentionally not exposed.
 
 ## Plan-based request limits
 
