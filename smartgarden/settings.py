@@ -100,17 +100,36 @@ WSGI_APPLICATION = 'smartgarden.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+def _database_config_from_env():
+    """Build the default database configuration from deployment environment."""
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        return dj_database_url.parse(database_url, conn_max_age=600)
 
-# If a DATABASE_URL is provided (e.g. postgres://...), prefer it in production.
-DATABASE_URL = os.environ.get('DATABASE_URL')
-if DATABASE_URL:
-    DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    if DEBUG:
+        return {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+
+    password = os.environ.get('POSTGRES_PASSWORD')
+    if not password:
+        raise ImproperlyConfigured(
+            'POSTGRES_PASSWORD or DATABASE_URL must be set when DEBUG=False.'
+        )
+
+    return {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'smartgarden'),
+        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+        'PASSWORD': password,
+        'HOST': os.environ.get('POSTGRES_HOST', 'db'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'CONN_MAX_AGE': 600,
+    }
+
+
+DATABASES = {'default': _database_config_from_env()}
 
 
 # Email

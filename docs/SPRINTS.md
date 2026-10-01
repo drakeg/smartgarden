@@ -412,4 +412,24 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/developer-token-lifecycle`
 
+**Status:** Complete — merged in PR #36.
+
+
+### Sprint 17 — Production Database Configuration Hardening
+
+**Outcome:** Make the production PostgreSQL service and Django application use one consistent environment-driven database configuration and prevent accidental SQLite or hardcoded-password deployments.
+
+**Acceptance criteria:**
+- Production Compose reads PostgreSQL credentials from `.env.prod` instead of hardcoded values.
+- PostgreSQL health checks verify readiness without hardcoded credentials.
+- `DATABASE_URL` remains supported and takes precedence when supplied.
+- Without `DATABASE_URL`, production Django builds its PostgreSQL connection from `POSTGRES_*` variables.
+- Production refuses to start without a database password when no `DATABASE_URL` is configured.
+- Development continues to default to SQLite.
+- Production no longer silently falls back to SQLite.
+- Regression tests cover environment-driven PostgreSQL, URL precedence, missing credentials, development fallback, and Compose wiring.
+- README and production environment documentation are updated.
+
+**Branch:** `fix/production-database-config`
+
 **Status:** In review.

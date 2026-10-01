@@ -147,10 +147,12 @@ ALLOWED_HOSTS=your.domain.com
 # Postgres (if not using managed DB)
 POSTGRES_DB=smartgarden
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
+POSTGRES_PASSWORD=replace-with-a-strong-database-password
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
 ```
+
+Django uses the same `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_PORT` values as the bundled PostgreSQL service. A supplied `DATABASE_URL` overrides those individual settings. Production does not silently fall back to SQLite; a database password or `DATABASE_URL` is required when `DEBUG=False`.
 
 Set `APP_PORT` in `.env.prod` (default example: `APP_PORT=80`) and start production Compose using that file for both Compose substitution and container environment:
 
