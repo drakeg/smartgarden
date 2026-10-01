@@ -9,6 +9,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", project_views.health, name="health"),
+    path("ready/", project_views.readiness, name="readiness"),
     path("", include("gardens.urls")),
     # DRF token auth (obtain token)
     path('api-token-auth/', obtain_auth_token, name='api_token_auth'),
