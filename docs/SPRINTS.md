@@ -432,4 +432,22 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `fix/production-database-config`
 
+**Status:** Complete — merged in PR #37.
+
+
+### Sprint 18 — Database Readiness and Startup Ordering
+
+**Outcome:** Distinguish application liveness from database readiness and prevent production migrations from racing PostgreSQL startup.
+
+**Acceptance criteria:**
+- `/health/` remains a lightweight liveness endpoint with no database dependency.
+- `/ready/` performs a minimal database query and returns HTTP 200 only when the database is reachable.
+- Database errors make `/ready/` return HTTP 503 without changing `/health/`.
+- Production web startup waits for PostgreSQL's health check before running migrations.
+- Production web container health checks use `/ready/`, not the liveness endpoint.
+- Regression tests cover ready/unavailable database behavior and Compose startup/health wiring.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/database-readiness-check`
+
 **Status:** In review.

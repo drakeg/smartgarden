@@ -3,6 +3,8 @@ from django.contrib.sessions.backends.db import SessionStore
 from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import DatabaseError
+from unittest.mock import patch
 from .models import GlobalNote
 
 
@@ -18,6 +20,24 @@ class BasicAppTests(TestCase):
 		resp = self.client.get(reverse('health'))
 		self.assertEqual(resp.status_code, 200)
 		self.assertEqual(resp.content, b"ok")
+
+	def test_readiness_endpoint_reports_database_ready(self):
+		"""The readiness endpoint should verify the database and return 200."""
+		resp = self.client.get(reverse('readiness'))
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual(resp.content, b"ready")
+
+	def test_readiness_endpoint_returns_503_when_database_is_unavailable(self):
+		"""Database failures should make the app not ready without changing liveness."""
+		with patch('smartgarden.views.connection.cursor', side_effect=DatabaseError('offline')):
+			resp = self.client.get(reverse('readiness'))
+
+		self.assertEqual(resp.status_code, 503)
+		self.assertEqual(resp.content, b"database unavailable")
+
+		health = self.client.get(reverse('health'))
+		self.assertEqual(health.status_code, 200)
+		self.assertEqual(health.content, b"ok")
 
 	def test_homepage_accessible(self):
 		"""The app root should be accessible (redirects or 200)."""
