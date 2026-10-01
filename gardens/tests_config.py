@@ -106,5 +106,5 @@ class ProductionDatabaseConfigurationTests(SimpleTestCase):
         compose = (Path(settings.BASE_DIR) / 'docker-compose.prod.yml').read_text()
 
         self.assertIn('db:\n    image: postgres:18\n    env_file: .env.prod', compose)
-        self.assertIn('pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB', compose)
+        self.assertIn('test: ["CMD", "pg_isready"]', compose)
         self.assertNotIn('POSTGRES_PASSWORD: postgres', compose)
