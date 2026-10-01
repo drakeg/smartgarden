@@ -102,6 +102,13 @@ class ProductionDatabaseConfigurationTests(SimpleTestCase):
 
         self.assertEqual(config['ENGINE'], 'django.db.backends.sqlite3')
 
+    def test_production_web_waits_for_database_health_and_uses_readiness(self):
+        compose = (Path(settings.BASE_DIR) / 'docker-compose.prod.yml').read_text()
+
+        self.assertIn('db:\n        condition: service_healthy', compose)
+        self.assertIn('curl -f http://localhost:8000/ready/ || exit 1', compose)
+        self.assertNotIn('curl -f http://localhost:8000/health/ || exit 1', compose)
+
     def test_production_compose_database_uses_env_file_not_hardcoded_password(self):
         compose = (Path(settings.BASE_DIR) / 'docker-compose.prod.yml').read_text()
 
