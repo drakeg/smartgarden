@@ -421,7 +421,7 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Acceptance criteria:**
 - Production Compose reads PostgreSQL credentials from `.env.prod` instead of hardcoded values.
-- PostgreSQL health checks use the configured database/user.
+- PostgreSQL health checks verify readiness without hardcoded credentials.
 - `DATABASE_URL` remains supported and takes precedence when supplied.
 - Without `DATABASE_URL`, production Django builds its PostgreSQL connection from `POSTGRES_*` variables.
 - Production refuses to start without a database password when no `DATABASE_URL` is configured.
