@@ -162,6 +162,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 
 Notes:
 - The production compose runs `migrate` and `collectstatic` before starting Gunicorn.
+- `/health/` is a lightweight liveness probe and does not query the database. `/ready/` performs a minimal database query and returns HTTP 503 when the configured database is unavailable.
+- Production Compose waits for PostgreSQL to report healthy before starting the web service, then uses `/ready/` for the web container health check.
 - Nginx is configured to serve `/static/` from a Docker volume and proxy other requests to the `web` service. See `deploy/nginx.prod.conf`.
 - Replace `SECRET_KEY` and database credentials with secure values and ensure `ALLOWED_HOSTS` is set correctly.
 
