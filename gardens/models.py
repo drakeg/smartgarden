@@ -135,6 +135,38 @@ class DeveloperAccessStatus(models.TextChoices):
     CANCELED = "CANCELED", "Canceled"
 
 
+class DeveloperApiUsageDaily(models.Model):
+    """Durable daily aggregate of accepted paid Developer API requests."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="developer_api_usage_daily",
+    )
+    usage_date = models.DateField(db_index=True)
+    plan = models.CharField(max_length=20, choices=DeveloperPlan.choices)
+    request_count = models.PositiveBigIntegerField(default=0)
+    success_count = models.PositiveBigIntegerField(default=0)
+    client_error_count = models.PositiveBigIntegerField(default=0)
+    server_error_count = models.PositiveBigIntegerField(default=0)
+    last_request_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "usage_date", "plan"],
+                name="uniq_developer_usage_user_date_plan",
+            ),
+        ]
+        ordering = ["-usage_date", "plan"]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.user} — {self.plan} — {self.usage_date} "
+            f"({self.request_count} requests)"
+        )
+
+
 class DeveloperAccess(models.Model):
     """Billing-provider-neutral API entitlement for developer access."""
 

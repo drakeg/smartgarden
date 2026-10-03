@@ -91,6 +91,27 @@ When the paywall is disabled, the entitlement is inactive/missing, or staff/supe
 
 This status is intentionally marked `approximate: true`. It reads Django REST Framework's shared throttle cache and is useful for developer-facing quota feedback, but it is **not billing-grade usage metering** and must not be treated as an invoice or durable usage ledger.
 
+## Durable developer usage history
+
+Authenticated developers can inspect database-backed API usage history at:
+
+```http
+GET /api/developer-usage/
+GET /api/developer-usage/?days=7
+```
+
+The optional `days` parameter defaults to 30 and is bounded to 1–90 days. The response includes period totals plus daily, per-plan buckets for:
+
+- total accepted paid API requests;
+- successful responses;
+- client-error responses;
+- server-error responses;
+- the last recorded request timestamp.
+
+Usage is recorded only when the developer paywall is enabled, the caller has an active entitlement, and the request is not using staff/superuser bypass. Authentication failures, entitlement denials, and HTTP 429 throttle rejections are not recorded. Plan is snapshotted into each daily bucket so plan changes do not rewrite historical usage.
+
+This ledger is durable in PostgreSQL and survives Redis/cache resets, unlike `/api/developer-quota/`. It is intended for reporting, reconciliation, and future billing integration. Responses currently include `billing_grade: false`: final billable-event semantics, pricing, refunds/credits, and payment-provider reconciliation must be defined before these counters are treated as invoice-authoritative.
+
 ## Developer token lifecycle
 
 The standard `/api-token-auth/` endpoint can issue the account's DRF token after username/password authentication. Authenticated developers can also manage that token at:
