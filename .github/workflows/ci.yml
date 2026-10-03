@@ -30,6 +30,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Validate operational scripts
+        run: sh -n scripts/backup_postgres.sh scripts/restore_postgres.sh scripts/backup_media.sh scripts/restore_media.sh
+
       - name: Prepare test environment
         env:
           SECRET_KEY: ci-only-secret-key
