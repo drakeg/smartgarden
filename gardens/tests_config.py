@@ -134,3 +134,28 @@ class ProductionRuntimeConfigurationTests(SimpleTestCase):
         self.assertIn('stop_grace_period: 30s', compose)
         self.assertIn('- --graceful-timeout\n      - "25"', compose)
         self.assertIn('- --timeout\n      - "30"', compose)
+
+
+class ReverseProxyConfigurationTests(SimpleTestCase):
+    def test_nginx_preserves_upstream_forwarded_proto_with_scheme_fallback(self):
+        nginx = (Path(settings.BASE_DIR) / 'deploy/nginx.prod.conf').read_text()
+
+        self.assertIn('map $http_x_forwarded_proto $smartgarden_forwarded_proto', nginx)
+        self.assertIn('default $http_x_forwarded_proto;', nginx)
+        self.assertIn('"" $scheme;', nginx)
+        self.assertIn(
+            'proxy_set_header X-Forwarded-Proto $smartgarden_forwarded_proto;',
+            nginx,
+        )
+
+    def test_production_env_documents_explicit_proxy_trust(self):
+        env = (Path(settings.BASE_DIR) / '.env.prod.example').read_text()
+        settings_source = (Path(settings.BASE_DIR) / 'smartgarden/settings.py').read_text()
+
+        self.assertIn('TRUST_X_FORWARDED_PROTO=True', env)
+        self.assertIn('SECURE_SSL_REDIRECT=True', env)
+        self.assertIn("'TRUST_X_FORWARDED_PROTO', 'False'", settings_source)
+        self.assertIn(
+            "SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')",
+            settings_source,
+        )
