@@ -450,4 +450,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/database-readiness-check`
 
+**Status:** Complete — merged in PR #38.
+
+
+### Sprint 19 — Graceful Production Runtime
+
+**Outcome:** Eliminate duplicate startup work and ensure deployment/stop signals reach Gunicorn directly with time to drain in-flight requests.
+
+**Acceptance criteria:**
+- Production no longer runs migrations or static collection a second time in the Compose command.
+- The image entrypoint remains the single startup path for migrations/static collection.
+- The entrypoint `exec`s the configured Gunicorn command so Gunicorn receives container signals directly.
+- Production Compose invokes Gunicorn without an intermediate shell.
+- Gunicorn has an explicit graceful shutdown timeout.
+- Docker's stop grace period is longer than the Gunicorn graceful timeout.
+- Regression tests cover single startup execution, direct Gunicorn command, and shutdown timing.
+- README and sprint documentation are updated.
+
+**Branch:** `fix/graceful-production-runtime`
+
 **Status:** In review.
