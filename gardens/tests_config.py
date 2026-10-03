@@ -115,3 +115,22 @@ class ProductionDatabaseConfigurationTests(SimpleTestCase):
         self.assertIn('db:\n    image: postgres:18\n    env_file: .env.prod', compose)
         self.assertIn('test: ["CMD", "pg_isready"]', compose)
         self.assertNotIn('POSTGRES_PASSWORD: postgres', compose)
+
+
+class ProductionRuntimeConfigurationTests(SimpleTestCase):
+    def test_production_web_uses_entrypoint_once_and_execs_gunicorn_directly(self):
+        compose = (Path(settings.BASE_DIR) / 'docker-compose.prod.yml').read_text()
+        entrypoint = (Path(settings.BASE_DIR) / 'entrypoint.sh').read_text()
+
+        self.assertIn('command:\n      - gunicorn', compose)
+        self.assertNotIn('sh -c "python manage.py migrate', compose)
+        self.assertEqual(compose.count('python manage.py migrate --noinput'), 0)
+        self.assertEqual(entrypoint.count('python manage.py migrate --noinput'), 1)
+        self.assertIn('exec "$@"', entrypoint)
+
+    def test_production_web_has_graceful_shutdown_window(self):
+        compose = (Path(settings.BASE_DIR) / 'docker-compose.prod.yml').read_text()
+
+        self.assertIn('stop_grace_period: 30s', compose)
+        self.assertIn('- --graceful-timeout\n      - "25"', compose)
+        self.assertIn('- --timeout\n      - "30"', compose)
