@@ -469,4 +469,23 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `fix/graceful-production-runtime`
 
+**Status:** Complete — merged in PR #39.
+
+
+### Sprint 20 — Trusted Proxy HTTPS Handling
+
+**Outcome:** Make Django HTTPS detection reliable behind a trusted TLS-terminating proxy without blindly trusting forwarded protocol headers.
+
+**Acceptance criteria:**
+- Production proxy trust is explicit and disabled by default in Django settings.
+- When enabled, Django treats `X-Forwarded-Proto: https` as a secure request.
+- Requests without the trusted HTTPS header continue to redirect when `SECURE_SSL_REDIRECT=True`.
+- Nginx preserves an upstream `X-Forwarded-Proto` value when provided.
+- Nginx falls back to its own request scheme when no upstream forwarded-protocol header exists.
+- The production environment example documents both proxy trust and HTTPS redirect settings.
+- Documentation warns against enabling proxy trust for directly exposed, untrusted traffic.
+- Regression tests cover Django redirect behavior and Nginx/header configuration.
+
+**Branch:** `fix/trusted-proxy-https`
+
 **Status:** In review.

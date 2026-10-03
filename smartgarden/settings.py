@@ -275,8 +275,16 @@ MEDIA_ROOT = BASE_DIR / "media"
 # When DEBUG is False, enable common security hardening defaults. These can
 # be overridden via environment variables if necessary.
 if not DEBUG:
-    # Redirect all non-HTTPS requests to HTTPS (set to False if TLS is handled upstream)
+    # Redirect all non-HTTPS requests to HTTPS.
     SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() in ('1', 'true', 'yes')
+
+    # Trust X-Forwarded-Proto only when deployment traffic reaches Nginx through
+    # a trusted TLS-terminating proxy/load balancer.
+    TRUST_X_FORWARDED_PROTO = os.environ.get(
+        'TRUST_X_FORWARDED_PROTO', 'False'
+    ).lower() in ('1', 'true', 'yes')
+    if TRUST_X_FORWARDED_PROTO:
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
     # Use secure cookies
     SESSION_COOKIE_SECURE = True
