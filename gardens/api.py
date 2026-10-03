@@ -1,5 +1,8 @@
 from django.conf import settings
 from django.core.cache import caches
+from django.db.models import F, Sum
+from django.utils import timezone
+from datetime import timedelta
 import math
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
@@ -8,7 +11,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.authtoken.models import Token
 
-from .models import DeveloperAccess, Garden, GlobalNote, Pod, PodNote
+from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, GlobalNote, Pod, PodNote
 from .serializers import GardenSerializer, GlobalNoteSerializer, PodNoteSerializer, PodSerializer
 
 
@@ -226,6 +229,111 @@ class HasDeveloperApiAccess(permissions.BasePermission):
         return access.has_access()
 
 
+class DeveloperUsageStatusView(APIView):
+    """Return durable daily Developer API usage for the signed-in user."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            days = int(request.query_params.get('days', '30'))
+        except ValueError:
+            days = 30
+        days = min(max(days, 1), 90)
+
+        end_date = timezone.localdate()
+        start_date = end_date - timedelta(days=days - 1)
+        rows = list(
+            DeveloperApiUsageDaily.objects.filter(
+                user=request.user,
+                usage_date__gte=start_date,
+                usage_date__lte=end_date,
+            ).order_by('usage_date', 'plan')
+        )
+        totals = DeveloperApiUsageDaily.objects.filter(
+            user=request.user,
+            usage_date__gte=start_date,
+            usage_date__lte=end_date,
+        ).aggregate(
+            request_count=Sum('request_count'),
+            success_count=Sum('success_count'),
+            client_error_count=Sum('client_error_count'),
+            server_error_count=Sum('server_error_count'),
+        )
+
+        return Response({
+            'days': days,
+            'start_date': start_date,
+            'end_date': end_date,
+            'request_count': totals['request_count'] or 0,
+            'success_count': totals['success_count'] or 0,
+            'client_error_count': totals['client_error_count'] or 0,
+            'server_error_count': totals['server_error_count'] or 0,
+            'durable': True,
+            'billing_grade': False,
+            'usage': [
+                {
+                    'date': row.usage_date,
+                    'plan': row.plan,
+                    'request_count': row.request_count,
+                    'success_count': row.success_count,
+                    'client_error_count': row.client_error_count,
+                    'server_error_count': row.server_error_count,
+                    'last_request_at': row.last_request_at,
+                }
+                for row in rows
+            ],
+        })
+
+
+class DeveloperUsageMeteringMixin:
+    """Persist daily aggregates for accepted paid Developer API requests."""
+
+    excluded_metering_statuses = {401, 403, 429}
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        self._record_developer_usage(request, response)
+        return response
+
+    def _record_developer_usage(self, request, response):
+        if not settings.API_PAYWALL_ENABLED:
+            return
+
+        user = request.user
+        if not user or not user.is_authenticated or user.is_staff or user.is_superuser:
+            return
+        if response.status_code in self.excluded_metering_statuses:
+            return
+
+        try:
+            access = user.developer_access
+        except DeveloperAccess.DoesNotExist:
+            return
+        if not access.has_access():
+            return
+
+        now = timezone.now()
+        bucket, _ = DeveloperApiUsageDaily.objects.get_or_create(
+            user=user,
+            usage_date=timezone.localdate(now),
+            plan=access.plan,
+        )
+
+        updates = {
+            'request_count': F('request_count') + 1,
+            'last_request_at': now,
+        }
+        if 200 <= response.status_code < 400:
+            updates['success_count'] = F('success_count') + 1
+        elif 400 <= response.status_code < 500:
+            updates['client_error_count'] = F('client_error_count') + 1
+        else:
+            updates['server_error_count'] = F('server_error_count') + 1
+
+        DeveloperApiUsageDaily.objects.filter(pk=bucket.pk).update(**updates)
+
+
 class IsGardenOwner(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         return request.user.is_authenticated and obj.owner_id == request.user.id
@@ -256,7 +364,7 @@ class IsGlobalNoteAuthorOrReadOnly(permissions.BasePermission):
         return request.user.is_authenticated and obj.author_id == request.user.id
 
 
-class GardenViewSet(viewsets.ModelViewSet):
+class GardenViewSet(DeveloperUsageMeteringMixin, viewsets.ModelViewSet):
     serializer_class = GardenSerializer
     throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsGardenOwner]
@@ -275,7 +383,7 @@ class GardenViewSet(viewsets.ModelViewSet):
         serializer.save(owner=self.request.user, is_guest=False, guest_token='')
 
 
-class PodViewSet(viewsets.ModelViewSet):
+class PodViewSet(DeveloperUsageMeteringMixin, viewsets.ModelViewSet):
     serializer_class = PodSerializer
     throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsPodGardenOwner]
@@ -303,7 +411,7 @@ class PodViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class PodNoteViewSet(viewsets.ModelViewSet):
+class PodNoteViewSet(DeveloperUsageMeteringMixin, viewsets.ModelViewSet):
     serializer_class = PodNoteSerializer
     throttle_classes = [DeveloperPlanRateThrottle]
     permission_classes = [permissions.IsAuthenticated, HasDeveloperApiAccess, IsPodNoteGardenOwner]
@@ -331,7 +439,7 @@ class PodNoteViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class GlobalNoteViewSet(viewsets.ModelViewSet):
+class GlobalNoteViewSet(DeveloperUsageMeteringMixin, viewsets.ModelViewSet):
     queryset = GlobalNote.objects.all().order_by('-created_at')
     serializer_class = GlobalNoteSerializer
     throttle_classes = [DeveloperPlanRateThrottle]
