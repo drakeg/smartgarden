@@ -166,6 +166,8 @@ Notes:
 - `/health/` is a lightweight liveness probe and does not query the database. `/ready/` performs a minimal database query and returns HTTP 503 when the configured database is unavailable.
 - Production Compose waits for PostgreSQL to report healthy before starting the web service, then uses `/ready/` for the web container health check.
 - Nginx is configured to serve `/static/` from a Docker volume and proxy other requests to the `web` service. See `deploy/nginx.prod.conf`.
+- When TLS terminates at a trusted upstream proxy/load balancer, set `TRUST_X_FORWARDED_PROTO=True`. Nginx preserves the upstream `X-Forwarded-Proto` value and falls back to its own scheme when that header is absent, allowing Django's HTTPS redirect logic to avoid proxy redirect loops.
+- Do not enable forwarded-protocol trust when Nginx is directly exposed to untrusted clients unless another trusted layer sanitizes that header.
 - Replace `SECRET_KEY` and database credentials with secure values and ensure `ALLOWED_HOSTS` is set correctly.
 
 
