@@ -11,7 +11,7 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 mkdir -p "$BACKUP_DIR"
-timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+timestamp="${BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 backup_path="$BACKUP_DIR/smartgarden-media-$timestamp.tar.gz"
 tmp_path="$backup_path.tmp"
 
@@ -26,6 +26,8 @@ if [ ! -s "$tmp_path" ]; then
   echo "Media backup failed: archive is empty." >&2
   exit 1
 fi
+
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run   --rm --no-deps --entrypoint tar web   -tzf - < "$tmp_path" > /dev/null
 
 mv "$tmp_path" "$backup_path"
 trap - EXIT HUP INT TERM

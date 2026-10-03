@@ -167,7 +167,7 @@ Notes:
 - Production Compose waits for PostgreSQL to report healthy before starting the web service, then uses `/ready/` for the web container health check.
 - Nginx is configured to serve `/static/` from a Docker volume and proxy other requests to the `web` service. See `deploy/nginx.prod.conf`.
 - User-uploaded pod-note photos are persisted in the `mediafiles` Docker volume and served read-only by Nginx under `/media/`.
-- Production backup and restore procedures for PostgreSQL and uploaded media are documented in [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md).
+- Production backup/restore, coordinated backup-set verification, and guarded local retention are documented in [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md).
 - When TLS terminates at a trusted upstream proxy/load balancer, set `TRUST_X_FORWARDED_PROTO=True`. Nginx preserves the upstream `X-Forwarded-Proto` value and falls back to its own scheme when that header is absent, allowing Django's HTTPS redirect logic to avoid proxy redirect loops.
 - Do not enable forwarded-protocol trust when Nginx is directly exposed to untrusted clients unless another trusted layer sanitizes that header.
 - Replace `SECRET_KEY` and database credentials with secure values and ensure `ALLOWED_HOSTS` is set correctly.

@@ -9,7 +9,13 @@ A complete recovery point requires both artifacts from roughly the same time.
 
 ## Create backups
 
-From the repository root with a valid `.env.prod`:
+From the repository root with a valid `.env.prod`, create a coordinated backup set:
+
+```bash
+sh scripts/backup_all.sh
+```
+
+The wrapper gives the database dump and media archive the same UTC timestamp and verifies both formats before reporting success. You can still run the component scripts individually:
 
 ```bash
 sh scripts/backup_postgres.sh
@@ -53,7 +59,41 @@ RESTORE_CONFIRM=YES sh scripts/restore_media.sh backups/smartgarden-media-YYYYMM
 
 Restore the database and media artifacts from the same recovery point whenever possible so database photo references match the files on disk.
 
-## Verification
+## Verify an existing backup set
+
+You can re-check existing artifacts without restoring them:
+
+```bash
+sh scripts/verify_backup_set.sh \
+  backups/smartgarden-YYYYMMDDTHHMMSSZ.dump \
+  backups/smartgarden-media-YYYYMMDDTHHMMSSZ.tar.gz
+```
+
+The command asks PostgreSQL's `pg_restore --list` to parse the DB dump and asks `tar` inside the application image to list the media archive. It does not modify the database or media volume.
+
+## Local retention
+
+The retention helper defaults to a 30-day **dry run** and only matches SmartGarden's timestamped DB/media backup filenames:
+
+```bash
+sh scripts/prune_backups.sh
+```
+
+Choose another age with `RETENTION_DAYS`:
+
+```bash
+RETENTION_DAYS=14 sh scripts/prune_backups.sh
+```
+
+Only after reviewing the dry-run list should deletion be enabled:
+
+```bash
+RETENTION_DAYS=30 PRUNE_CONFIRM=YES sh scripts/prune_backups.sh
+```
+
+This is local retention only. Keep independent off-host copies according to your recovery requirements.
+
+## Verification after restore
 
 After recovery:
 
