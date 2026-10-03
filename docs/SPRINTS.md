@@ -510,4 +510,26 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `ops/postgres-backup-restore`
 
+**Status:** Complete — merged in PR #41.
+
+
+### Sprint 22 — Backup Verification and Retention
+
+**Outcome:** Make production recovery artifacts easier to trust and safer to retain by coordinating DB/media backups, validating formats before acceptance, and providing guarded local pruning.
+
+**Acceptance criteria:**
+- Database and media backup scripts accept a shared timestamp.
+- A single backup command creates matching DB/media recovery artifacts.
+- PostgreSQL dumps are parsed with `pg_restore --list` before being accepted.
+- Media archives are listed with `tar` before being accepted.
+- Existing DB/media backup pairs can be verified without restoring them.
+- Local retention defaults to 30 days and dry-run behavior.
+- Deletion requires explicit `PRUNE_CONFIRM=YES`.
+- Retention only matches SmartGarden's timestamped DB/media backup filename patterns.
+- CI validates all backup/restore/verification/retention shell scripts.
+- Regression tests cover shared timestamps, format verification, and pruning safeguards.
+- The recovery runbook documents coordinated backups, verification, local retention, and continued off-host storage requirements.
+
+**Branch:** `ops/backup-verification-retention`
+
 **Status:** In review.
