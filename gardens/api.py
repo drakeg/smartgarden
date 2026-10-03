@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.cache import caches
+import math
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -90,6 +91,85 @@ class DeveloperAccessStatusView(APIView):
             'access_expires_at': access.access_expires_at if access else None,
             'request_rate': request_rate,
         })
+
+
+class DeveloperQuotaStatusView(APIView):
+    """Return the caller's approximate current developer API rate-window usage."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        admin_bypass = bool(user.is_staff or user.is_superuser)
+
+        try:
+            access = user.developer_access
+        except DeveloperAccess.DoesNotExist:
+            access = None
+
+        paywall_enabled = bool(settings.API_PAYWALL_ENABLED)
+        entitlement_active = bool(access and access.has_access())
+        quota_applicable = (
+            paywall_enabled
+            and entitlement_active
+            and not admin_bypass
+        )
+
+        response = {
+            'paywall_enabled': paywall_enabled,
+            'quota_applicable': quota_applicable,
+            'admin_bypass': admin_bypass,
+            'plan': access.plan if access else None,
+            'request_rate': None,
+            'limit': None,
+            'used': None,
+            'remaining': None,
+            'window_seconds': None,
+            'retry_after_seconds': None,
+            'approximate': True,
+        }
+
+        if not quota_applicable:
+            return Response(response)
+
+        rate = settings.API_PLAN_THROTTLE_RATES.get(access.plan)
+        if not rate:
+            return Response(response)
+
+        throttle = DeveloperPlanRateThrottle()
+        throttle.rate = rate
+        throttle.num_requests, throttle.duration = throttle.parse_rate(rate)
+
+        key = throttle.cache_format % {
+            'scope': f'{throttle.scope}-{access.plan.lower()}',
+            'ident': str(user.pk),
+        }
+        now = throttle.timer()
+        history = throttle.cache.get(key, [])
+        active_history = [
+            timestamp
+            for timestamp in history
+            if timestamp > now - throttle.duration
+        ]
+
+        used = len(active_history)
+        remaining = max(throttle.num_requests - used, 0)
+        retry_after_seconds = None
+        if remaining == 0 and active_history:
+            retry_after_seconds = max(
+                0,
+                math.ceil(active_history[-1] + throttle.duration - now),
+            )
+
+        response.update({
+            'request_rate': rate,
+            'limit': throttle.num_requests,
+            'used': used,
+            'remaining': remaining,
+            'window_seconds': int(throttle.duration),
+            'retry_after_seconds': retry_after_seconds,
+        })
+        return Response(response)
 
 
 class DeveloperTokenView(APIView):

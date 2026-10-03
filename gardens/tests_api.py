@@ -465,6 +465,97 @@ class ApiTests(APITestCase):
         self.assertTrue(data['effective_access'])
         self.assertIsNone(data['request_rate'])
 
+    def test_developer_quota_status_requires_authentication(self):
+        self.client.credentials()
+        resp = self.client.get('/api/developer-quota/')
+        self.assertIn(resp.status_code, (401, 403))
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_quota_status_without_active_entitlement_is_not_applicable(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/developer-quota/')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data['quota_applicable'])
+        self.assertIsNone(data['used'])
+        self.assertIsNone(data['remaining'])
+        self.assertTrue(data['approximate'])
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '2/minute',
+            'PRO': '4/minute',
+            'ENTERPRISE': '6/minute',
+        },
+    )
+    def test_developer_quota_reports_current_shared_throttle_usage(self):
+        caches['developer_api'].clear()
+        DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.STARTER,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        first = self.client.get('/api/gardens/')
+        self.assertEqual(first.status_code, 200)
+
+        quota = self.client.get('/api/developer-quota/')
+        self.assertEqual(quota.status_code, 200)
+        data = quota.json()
+        self.assertTrue(data['quota_applicable'])
+        self.assertEqual(data['request_rate'], '2/minute')
+        self.assertEqual(data['limit'], 2)
+        self.assertEqual(data['used'], 1)
+        self.assertEqual(data['remaining'], 1)
+        self.assertEqual(data['window_seconds'], 60)
+        self.assertIsNone(data['retry_after_seconds'])
+
+        second = self.client.get('/api/gardens/')
+        self.assertEqual(second.status_code, 200)
+
+        exhausted = self.client.get('/api/developer-quota/').json()
+        self.assertEqual(exhausted['used'], 2)
+        self.assertEqual(exhausted['remaining'], 0)
+        self.assertGreaterEqual(exhausted['retry_after_seconds'], 1)
+        self.assertLessEqual(exhausted['retry_after_seconds'], 60)
+
+        rejected = self.client.get('/api/gardens/')
+        self.assertEqual(rejected.status_code, 429)
+
+        after_reject = self.client.get('/api/developer-quota/').json()
+        self.assertEqual(after_reject['used'], 2)
+        self.assertEqual(after_reject['remaining'], 0)
+
+    @override_settings(API_PAYWALL_ENABLED=False)
+    def test_developer_quota_is_not_applicable_when_paywall_is_disabled(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        data = self.client.get('/api/developer-quota/').json()
+
+        self.assertFalse(data['paywall_enabled'])
+        self.assertFalse(data['quota_applicable'])
+        self.assertIsNone(data['request_rate'])
+
+    @override_settings(API_PAYWALL_ENABLED=True)
+    def test_developer_quota_reports_staff_bypass(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        DeveloperAccess.objects.create(
+            user=self.user,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        data = self.client.get('/api/developer-quota/').json()
+
+        self.assertTrue(data['admin_bypass'])
+        self.assertFalse(data['quota_applicable'])
+        self.assertIsNone(data['used'])
+
     def test_developer_token_status_does_not_expose_existing_key(self):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
         resp = self.client.get('/api/developer-token/')
