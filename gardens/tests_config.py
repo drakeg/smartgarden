@@ -193,3 +193,29 @@ class DatabaseBackupRestoreConfigurationTests(SimpleTestCase):
 
         self.assertIn('backups/', gitignore)
         self.assertIn('*.dump', gitignore)
+
+
+class PersistentMediaConfigurationTests(SimpleTestCase):
+    def test_production_media_uses_shared_persistent_volume(self):
+        compose = (Path(settings.BASE_DIR) / 'docker-compose.prod.yml').read_text()
+
+        self.assertIn('mediafiles:/app/media', compose)
+        self.assertIn('mediafiles:/usr/share/nginx/html/media:ro', compose)
+        self.assertIn('mediafiles:', compose)
+
+    def test_nginx_serves_persistent_media_with_nosniff(self):
+        nginx = (Path(settings.BASE_DIR) / 'deploy/nginx.prod.conf').read_text()
+
+        self.assertIn('location /media/', nginx)
+        self.assertIn('alias /usr/share/nginx/html/media/;', nginx)
+        self.assertIn('add_header X-Content-Type-Options nosniff always;', nginx)
+
+    def test_media_backup_and_restore_scripts_use_media_volume(self):
+        backup = (Path(settings.BASE_DIR) / 'scripts/backup_media.sh').read_text()
+        restore = (Path(settings.BASE_DIR) / 'scripts/restore_media.sh').read_text()
+
+        self.assertIn('-C /app/media -czf - .', backup)
+        self.assertIn('smartgarden-media-$timestamp.tar.gz', backup)
+        self.assertIn('tmp_path="$backup_path.tmp"', backup)
+        self.assertIn('RESTORE_CONFIRM', restore)
+        self.assertIn('-C /app/media -xzf -', restore)
