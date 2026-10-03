@@ -256,3 +256,32 @@ class BackupVerificationRetentionTests(SimpleTestCase):
         self.assertIn('smartgarden-media-????????T??????Z.tar.gz', script)
         self.assertIn('Dry run:', script)
         self.assertIn('-exec rm -f -- {} +', script)
+
+
+class ContainerImageHardeningTests(SimpleTestCase):
+    def test_runtime_image_uses_non_root_user_and_multistage_build(self):
+        dockerfile = (Path(settings.BASE_DIR) / 'Dockerfile').read_text()
+
+        self.assertIn('FROM python:3.14-slim AS builder', dockerfile)
+        self.assertIn('FROM python:3.14-slim AS runtime', dockerfile)
+        self.assertIn('COPY --from=builder /install /usr/local', dockerfile)
+        self.assertIn('USER smartgarden', dockerfile)
+        self.assertIn('useradd --system', dockerfile)
+        self.assertIn('chown -R smartgarden:smartgarden /app', dockerfile)
+
+    def test_runtime_stage_excludes_compiler_toolchain(self):
+        dockerfile = (Path(settings.BASE_DIR) / 'Dockerfile').read_text()
+        runtime = dockerfile.split('FROM python:3.14-slim AS runtime', 1)[1]
+
+        self.assertNotIn('build-essential', runtime)
+        self.assertNotIn(' gcc ', runtime)
+        self.assertNotIn('libpq-dev', runtime)
+        self.assertIn('libpq5 curl', runtime)
+
+    def test_entrypoint_runs_as_application_user_and_remains_exec_based(self):
+        dockerfile = (Path(settings.BASE_DIR) / 'Dockerfile').read_text()
+        entrypoint = (Path(settings.BASE_DIR) / 'entrypoint.sh').read_text()
+
+        self.assertIn('USER smartgarden', dockerfile)
+        self.assertIn('ENTRYPOINT ["/app/entrypoint.sh"]', dockerfile)
+        self.assertIn('exec "$@"', entrypoint)
