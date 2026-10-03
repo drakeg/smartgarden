@@ -488,4 +488,26 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `fix/trusted-proxy-https`
 
+**Status:** Complete — merged in PR #40.
+
+
+### Sprint 21 — Production Data Recovery and Persistent Media
+
+**Outcome:** Protect both PostgreSQL data and uploaded pod-note photos from container replacement and provide a repeatable backup/restore path.
+
+**Acceptance criteria:**
+- Production uploaded media is stored in a named Docker volume instead of the web container filesystem.
+- Nginx serves the shared media volume read-only under `/media/`.
+- PostgreSQL backup tooling creates timestamped custom-format dumps using the configured production database credentials.
+- PostgreSQL backup output is written atomically and empty dumps are rejected.
+- PostgreSQL restore requires explicit confirmation and fails fast on restore errors.
+- Media backup tooling creates timestamped compressed archives from the persistent media volume.
+- Media restore requires explicit confirmation and overlays archived files without deleting unrelated files.
+- Generated backup files are ignored by Git.
+- CI validates recovery-script shell syntax.
+- Regression tests cover persistent media wiring, Nginx media serving, and backup/restore script safeguards.
+- A production recovery runbook documents off-host backup, maintenance-window restore, and post-restore verification.
+
+**Branch:** `ops/postgres-backup-restore`
+
 **Status:** In review.

@@ -49,3 +49,7 @@ node_modules/
 # Misc
 *.swp
 *.swo
+
+# Database backups
+backups/
+*.dump
