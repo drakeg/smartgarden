@@ -219,3 +219,40 @@ class PersistentMediaConfigurationTests(SimpleTestCase):
         self.assertIn('tmp_path="$backup_path.tmp"', backup)
         self.assertIn('RESTORE_CONFIRM', restore)
         self.assertIn('-C /app/media -xzf -', restore)
+
+
+class BackupVerificationRetentionTests(SimpleTestCase):
+    def test_individual_backup_scripts_support_shared_timestamp_and_verify_output(self):
+        db = (Path(settings.BASE_DIR) / 'scripts/backup_postgres.sh').read_text()
+        media = (Path(settings.BASE_DIR) / 'scripts/backup_media.sh').read_text()
+
+        self.assertIn('BACKUP_TIMESTAMP', db)
+        self.assertIn('BACKUP_TIMESTAMP', media)
+        self.assertIn('pg_restore --list', db)
+        self.assertIn('-tzf - < "$tmp_path"', media)
+
+    def test_backup_all_uses_one_timestamp_and_verifies_the_pair(self):
+        script = (Path(settings.BASE_DIR) / 'scripts/backup_all.sh').read_text()
+
+        self.assertIn('export BACKUP_TIMESTAMP="$timestamp"', script)
+        self.assertIn('sh scripts/backup_postgres.sh', script)
+        self.assertIn('sh scripts/backup_media.sh', script)
+        self.assertIn('sh scripts/verify_backup_set.sh "$db_backup" "$media_backup"', script)
+
+    def test_backup_set_verifier_checks_database_and_media_formats(self):
+        script = (Path(settings.BASE_DIR) / 'scripts/verify_backup_set.sh').read_text()
+
+        self.assertIn('pg_restore --list', script)
+        self.assertIn('-tzf - < "$media_backup"', script)
+        self.assertIn('Backup artifact is missing or empty', script)
+
+    def test_prune_backups_defaults_to_dry_run_and_matches_only_smartgarden_artifacts(self):
+        script = (Path(settings.BASE_DIR) / 'scripts/prune_backups.sh').read_text()
+
+        self.assertIn('RETENTION_DAYS="${RETENTION_DAYS:-30}"', script)
+        self.assertIn('PRUNE_CONFIRM', script)
+        self.assertIn('!= "YES"', script)
+        self.assertIn('smartgarden-????????T??????Z.dump', script)
+        self.assertIn('smartgarden-media-????????T??????Z.tar.gz', script)
+        self.assertIn('Dry run:', script)
+        self.assertIn('-exec rm -f -- {} +', script)
