@@ -552,4 +552,26 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `security/nonroot-multistage-image`
 
+**Status:** Complete — merged in PR #43.
+
+
+### Sprint 24 — Developer API Quota Status
+
+**Outcome:** Give developers self-service visibility into the current rolling API rate-limit window without introducing a billing ledger.
+
+**Acceptance criteria:**
+- `GET /api/developer-quota/` requires authentication.
+- Active paid plans report configured rate, request limit, used requests, remaining requests, and rolling-window duration.
+- Exhausted quotas report an approximate retry delay.
+- Requests rejected with HTTP 429 do not increase the reported used count.
+- The quota-status endpoint itself does not consume plan quota.
+- Missing/inactive entitlements report quota as not applicable.
+- Disabled-paywall mode reports quota as not applicable.
+- Staff/superuser bypass reports quota as not applicable.
+- Responses explicitly identify the data as approximate rather than billing-grade usage metering.
+- Regression tests exercise the shared throttle cache and exhaustion behavior.
+- README and developer API documentation are updated.
+
+**Branch:** `feature/developer-quota-status`
+
 **Status:** In review.
