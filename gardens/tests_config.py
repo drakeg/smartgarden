@@ -159,3 +159,37 @@ class ReverseProxyConfigurationTests(SimpleTestCase):
             "SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')",
             settings_source,
         )
+
+
+class DatabaseBackupRestoreConfigurationTests(SimpleTestCase):
+    def test_backup_script_uses_custom_format_atomic_output_and_env_file(self):
+        script = (Path(settings.BASE_DIR) / 'scripts/backup_postgres.sh').read_text()
+
+        self.assertIn('docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T db', script)
+        self.assertIn('pg_dump', script)
+        self.assertIn('--format=custom', script)
+        self.assertIn('--no-owner', script)
+        self.assertIn('--no-privileges', script)
+        self.assertIn('backup_path="$BACKUP_DIR/smartgarden-$timestamp.dump"', script)
+        self.assertIn('tmp_path="$backup_path.tmp"', script)
+        self.assertIn('mv "$tmp_path" "$backup_path"', script)
+        self.assertNotIn('POSTGRES_PASSWORD=', script)
+
+    def test_restore_script_requires_confirmation_and_cleans_existing_objects(self):
+        script = (Path(settings.BASE_DIR) / 'scripts/restore_postgres.sh').read_text()
+
+        self.assertIn('RESTORE_CONFIRM', script)
+        self.assertIn('!= "YES"', script)
+        self.assertIn('pg_restore', script)
+        self.assertIn('--clean', script)
+        self.assertIn('--if-exists', script)
+        self.assertIn('--exit-on-error', script)
+        self.assertIn('--no-owner', script)
+        self.assertIn('--no-privileges', script)
+        self.assertNotIn('POSTGRES_PASSWORD=', script)
+
+    def test_generated_database_backups_are_gitignored(self):
+        gitignore = (Path(settings.BASE_DIR) / '.gitignore').read_text()
+
+        self.assertIn('backups/', gitignore)
+        self.assertIn('*.dump', gitignore)
