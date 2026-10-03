@@ -31,7 +31,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate operational scripts
-        run: sh -n scripts/backup_postgres.sh scripts/restore_postgres.sh scripts/backup_media.sh scripts/restore_media.sh
+        run: sh -n scripts/backup_postgres.sh scripts/restore_postgres.sh scripts/backup_media.sh scripts/restore_media.sh scripts/backup_all.sh scripts/verify_backup_set.sh scripts/prune_backups.sh
 
       - name: Prepare test environment
         env:
