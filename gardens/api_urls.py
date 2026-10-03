@@ -1,7 +1,7 @@
 from rest_framework import routers
 from django.urls import path, include
 
-from .api import DeveloperAccessStatusView, DeveloperTokenView, GardenViewSet, PodViewSet, PodNoteViewSet, GlobalNoteViewSet
+from .api import DeveloperAccessStatusView, DeveloperQuotaStatusView, DeveloperTokenView, GardenViewSet, PodViewSet, PodNoteViewSet, GlobalNoteViewSet
 
 router = routers.DefaultRouter()
 router.register(r'gardens', GardenViewSet, basename='garden')
@@ -11,6 +11,7 @@ router.register(r'global-notes', GlobalNoteViewSet, basename='global-note')
 
 urlpatterns = [
     path('developer-access/', DeveloperAccessStatusView.as_view(), name='developer-access-status'),
+    path('developer-quota/', DeveloperQuotaStatusView.as_view(), name='developer-quota-status'),
     path('developer-token/', DeveloperTokenView.as_view(), name='developer-token'),
     path('', include(router.urls)),
 ]
