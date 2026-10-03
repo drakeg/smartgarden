@@ -1,4 +1,4 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.contrib.sessions.backends.db import SessionStore
 from django.urls import reverse
 from django.conf import settings
@@ -38,6 +38,23 @@ class BasicAppTests(TestCase):
 		health = self.client.get(reverse('health'))
 		self.assertEqual(health.status_code, 200)
 		self.assertEqual(health.content, b"ok")
+
+	@override_settings(
+		SECURE_SSL_REDIRECT=True,
+		SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'),
+	)
+	def test_trusted_forwarded_https_avoids_redirect_loop(self):
+		resp = self.client.get('/health/', HTTP_X_FORWARDED_PROTO='https')
+		self.assertEqual(resp.status_code, 200)
+
+	@override_settings(
+		SECURE_SSL_REDIRECT=True,
+		SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'),
+	)
+	def test_untrusted_http_request_still_redirects_to_https(self):
+		resp = self.client.get('/health/')
+		self.assertEqual(resp.status_code, 301)
+		self.assertTrue(resp['Location'].startswith('https://'))
 
 	def test_homepage_accessible(self):
 		"""The app root should be accessible (redirects or 200)."""
