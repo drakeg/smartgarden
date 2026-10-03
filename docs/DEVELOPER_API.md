@@ -68,6 +68,29 @@ This endpoint remains available even when the caller does not have an active dev
 
 Billing provider, customer, and subscription identifiers are intentionally not exposed.
 
+## Developer quota status
+
+Authenticated developers can inspect their current rolling rate-limit window at:
+
+```http
+GET /api/developer-quota/
+```
+
+For an active paid developer plan, the response reports:
+
+- configured request rate;
+- request limit for the rolling window;
+- requests currently counted in that window;
+- requests remaining;
+- window duration in seconds;
+- approximate retry delay when the window is exhausted.
+
+The quota endpoint itself is not counted against the developer API plan allowance. Requests rejected with HTTP 429 are not added to the throttle history, so the reported `used` count reflects requests that actually entered the active rolling window.
+
+When the paywall is disabled, the entitlement is inactive/missing, or staff/superuser bypass applies, `quota_applicable` is false and usage fields are null.
+
+This status is intentionally marked `approximate: true`. It reads Django REST Framework's shared throttle cache and is useful for developer-facing quota feedback, but it is **not billing-grade usage metering** and must not be treated as an invoice or durable usage ledger.
+
 ## Developer token lifecycle
 
 The standard `/api-token-auth/` endpoint can issue the account's DRF token after username/password authentication. Authenticated developers can also manage that token at:
