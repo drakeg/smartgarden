@@ -162,6 +162,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 
 Notes:
 - The image entrypoint runs `migrate` and `collectstatic` once, then `exec`s Gunicorn directly so container signals reach the application process correctly.
+- The production image uses a multi-stage build and runs Django/Gunicorn as the unprivileged `smartgarden` user; compiler/build packages remain in the builder stage only.
+- **Upgrade note:** existing `staticfiles` or `mediafiles` volumes created by older root-running images may need a one-time ownership repair before starting the hardened image: `docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm --no-deps --user root --entrypoint sh web -c 'chown -R smartgarden:smartgarden /app/staticfiles /app/media'`.
 - Production gives Gunicorn up to 25 seconds to finish in-flight requests inside Docker's 30-second stop grace period.
 - `/health/` is a lightweight liveness probe and does not query the database. `/ready/` performs a minimal database query and returns HTTP 503 when the configured database is unavailable.
 - Production Compose waits for PostgreSQL to report healthy before starting the web service, then uses `/ready/` for the web container health check.

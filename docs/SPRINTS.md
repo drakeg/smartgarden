@@ -532,4 +532,24 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `ops/backup-verification-retention`
 
+**Status:** Complete — merged in PR #42.
+
+
+### Sprint 23 — Non-Root Multi-Stage Production Image
+
+**Outcome:** Reduce container attack surface by removing build tools from the runtime image and running the application as an unprivileged user.
+
+**Acceptance criteria:**
+- Python dependencies are built in a dedicated builder stage.
+- The runtime stage does not include compiler/build-header packages.
+- Runtime-only packages remain available for health checks/database connectivity.
+- The application runs as a dedicated non-root `smartgarden` user.
+- Application, static, and media directories are owned by the runtime user in the image.
+- The existing exec-based entrypoint behavior is preserved.
+- Existing production volumes have a documented one-time ownership migration path.
+- Regression tests prevent drift back to a root runtime or single-stage compiler-bearing image.
+- README and sprint documentation are updated.
+
+**Branch:** `security/nonroot-multistage-image`
+
 **Status:** In review.
