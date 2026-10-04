@@ -10,6 +10,7 @@ urlpatterns = [
     path("accounts/register/", views.register_view, name="register"),
     path("accounts/confirm/<str:token>/", views.confirm_registration, name="confirm_registration"),
     path("accounts/logout/", views.logout_view, name="logout"),
+    path("account/developer/", views.developer_dashboard, name="developer_dashboard"),
 
     path("gardens/", views.garden_list, name="garden_list"),
     path("gardens/new/", views.garden_create, name="garden_create"),
