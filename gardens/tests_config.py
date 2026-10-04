@@ -285,3 +285,15 @@ class ContainerImageHardeningTests(SimpleTestCase):
         self.assertIn('USER smartgarden', dockerfile)
         self.assertIn('ENTRYPOINT ["/app/entrypoint.sh"]', dockerfile)
         self.assertIn('exec "$@"', entrypoint)
+
+
+class DeveloperUsageAdminConfigurationTests(SimpleTestCase):
+    def test_developer_usage_admin_is_registered_read_only(self):
+        admin_source = (Path(settings.BASE_DIR) / 'gardens/admin.py').read_text()
+
+        self.assertIn('@admin.register(DeveloperApiUsageDaily)', admin_source)
+        self.assertIn('class DeveloperApiUsageDailyAdmin(admin.ModelAdmin):', admin_source)
+        self.assertIn('def has_add_permission', admin_source)
+        self.assertIn('def has_change_permission', admin_source)
+        self.assertIn('def has_delete_permission', admin_source)
+        self.assertIn('return False', admin_source)

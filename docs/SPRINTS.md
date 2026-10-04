@@ -597,4 +597,24 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/durable-api-usage`
 
+**Status:** Complete — merged in PR #45.
+
+
+### Sprint 26 — Developer Usage Reporting
+
+**Outcome:** Make durable Developer API usage easy to export and inspect without giving developers or support staff mutation access to metering data.
+
+**Acceptance criteria:**
+- `GET /api/developer-usage/export/` requires authentication.
+- CSV export is limited to the authenticated developer's own usage.
+- CSV export uses the same default 30-day and bounded 1–90 day history window as the JSON endpoint.
+- Export includes date, plan, total requests, response-class counts, and last-request timestamp.
+- Export excludes billing-provider identifiers and other developers' usage.
+- Django admin exposes durable usage for support/reconciliation.
+- The admin usage view is read-only and does not allow add/change/delete operations.
+- Regression tests cover authentication, ownership isolation, date-window bounds, CSV contents, and read-only admin registration.
+- README and developer API documentation are updated.
+
+**Branch:** `feature/developer-usage-reporting`
+
 **Status:** In review.

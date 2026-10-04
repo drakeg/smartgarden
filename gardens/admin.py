@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DeveloperAccess, Garden, Pod, PodNote, GlobalNote
+from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, Pod, PodNote, GlobalNote
 
 class PodInline(admin.TabularInline):
     model = Pod
@@ -36,3 +36,39 @@ class DeveloperAccessAdmin(admin.ModelAdmin):
     list_display = ("user", "plan", "status", "billing_provider", "access_expires_at", "updated_at")
     list_filter = ("plan", "status", "billing_provider")
     search_fields = ("user__username", "user__email", "billing_customer_id", "billing_subscription_id")
+
+
+@admin.register(DeveloperApiUsageDaily)
+class DeveloperApiUsageDailyAdmin(admin.ModelAdmin):
+    list_display = (
+        "usage_date",
+        "user",
+        "plan",
+        "request_count",
+        "success_count",
+        "client_error_count",
+        "server_error_count",
+        "last_request_at",
+    )
+    list_filter = ("plan", "usage_date")
+    search_fields = ("user__username", "user__email")
+    date_hierarchy = "usage_date"
+    readonly_fields = (
+        "user",
+        "usage_date",
+        "plan",
+        "request_count",
+        "success_count",
+        "client_error_count",
+        "server_error_count",
+        "last_request_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

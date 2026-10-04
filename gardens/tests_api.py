@@ -703,6 +703,64 @@ class ApiTests(APITestCase):
         invalid = self.client.get('/api/developer-usage/?days=not-a-number').json()
         self.assertEqual(invalid['days'], 30)
 
+    def test_developer_usage_csv_export_requires_authentication(self):
+        self.client.credentials()
+        resp = self.client.get('/api/developer-usage/export/')
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_developer_usage_csv_export_is_owner_scoped_and_bounded(self):
+        today = timezone.localdate()
+        other = user_model.objects.create_user(username='usage-other', password='pass')
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=today,
+            plan=DeveloperPlan.PRO,
+            request_count=5,
+            success_count=4,
+            client_error_count=1,
+        )
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=today - timedelta(days=4),
+            plan=DeveloperPlan.STARTER,
+            request_count=3,
+            success_count=3,
+        )
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=today - timedelta(days=40),
+            plan=DeveloperPlan.STARTER,
+            request_count=99,
+            success_count=99,
+        )
+        DeveloperApiUsageDaily.objects.create(
+            user=other,
+            usage_date=today,
+            plan=DeveloperPlan.ENTERPRISE,
+            request_count=777,
+            success_count=777,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/developer-usage/export/?days=7')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'text/csv')
+        self.assertIn('attachment; filename="smartgarden-api-usage-', resp['Content-Disposition'])
+
+        content = resp.content.decode('utf-8')
+        self.assertIn('date,plan,request_count,success_count,client_error_count,server_error_count,last_request_at', content)
+        self.assertIn(',PRO,5,4,1,0,', content)
+        self.assertIn(',STARTER,3,3,0,0,', content)
+        self.assertNotIn(',STARTER,99,99,0,0,', content)
+        self.assertNotIn(',ENTERPRISE,777,777,0,0,', content)
+
+        bounded = self.client.get('/api/developer-usage/export/?days=999')
+        self.assertIn(
+            str(today - timedelta(days=89)),
+            bounded['Content-Disposition'],
+        )
+
     def test_developer_token_status_does_not_expose_existing_key(self):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
         resp = self.client.get('/api/developer-token/')
