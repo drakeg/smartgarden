@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperPlan, Garden, GlobalNote, Pod
+from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, Pod
 
 user_model = get_user_model()
 
@@ -555,6 +555,153 @@ class ApiTests(APITestCase):
         self.assertTrue(data['admin_bypass'])
         self.assertFalse(data['quota_applicable'])
         self.assertIsNone(data['used'])
+
+    def test_developer_usage_status_requires_authentication(self):
+        self.client.credentials()
+        resp = self.client.get('/api/developer-usage/')
+        self.assertIn(resp.status_code, (401, 403))
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '10/minute',
+            'PRO': '20/minute',
+            'ENTERPRISE': '30/minute',
+        },
+    )
+    def test_paid_api_requests_are_recorded_in_durable_daily_usage(self):
+        DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.STARTER,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        ok = self.client.get('/api/gardens/')
+        bad = self.client.post('/api/gardens/', {}, format='json')
+
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(bad.status_code, 400)
+
+        usage = DeveloperApiUsageDaily.objects.get(
+            user=self.user,
+            usage_date=timezone.localdate(),
+            plan=DeveloperPlan.STARTER,
+        )
+        self.assertEqual(usage.request_count, 2)
+        self.assertEqual(usage.success_count, 1)
+        self.assertEqual(usage.client_error_count, 1)
+        self.assertEqual(usage.server_error_count, 0)
+        self.assertIsNotNone(usage.last_request_at)
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '1/minute',
+            'PRO': '20/minute',
+            'ENTERPRISE': '30/minute',
+        },
+    )
+    def test_throttled_requests_are_not_added_to_durable_usage(self):
+        caches['developer_api'].clear()
+        DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.STARTER,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 429)
+
+        usage = DeveloperApiUsageDaily.objects.get(user=self.user)
+        self.assertEqual(usage.request_count, 1)
+        self.assertEqual(usage.success_count, 1)
+
+    @override_settings(API_PAYWALL_ENABLED=False)
+    def test_durable_usage_is_not_recorded_when_paywall_is_disabled(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/gardens/')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(DeveloperApiUsageDaily.objects.filter(user=self.user).exists())
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '10/minute',
+            'PRO': '20/minute',
+            'ENTERPRISE': '30/minute',
+        },
+    )
+    def test_usage_plan_is_snapshotted_when_plan_changes(self):
+        access = DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.STARTER,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+
+        access.plan = DeveloperPlan.PRO
+        access.save(update_fields=['plan'])
+        self.assertEqual(self.client.get('/api/gardens/').status_code, 200)
+
+        buckets = DeveloperApiUsageDaily.objects.filter(
+            user=self.user,
+            usage_date=timezone.localdate(),
+        ).order_by('plan')
+        self.assertEqual(buckets.count(), 2)
+        self.assertEqual(
+            {bucket.plan: bucket.request_count for bucket in buckets},
+            {DeveloperPlan.STARTER: 1, DeveloperPlan.PRO: 1},
+        )
+
+    def test_developer_usage_status_reports_durable_history_and_bounds_days(self):
+        today = timezone.localdate()
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=today,
+            plan=DeveloperPlan.PRO,
+            request_count=5,
+            success_count=4,
+            client_error_count=1,
+        )
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=today - timedelta(days=4),
+            plan=DeveloperPlan.STARTER,
+            request_count=3,
+            success_count=3,
+        )
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=today - timedelta(days=40),
+            plan=DeveloperPlan.STARTER,
+            request_count=99,
+            success_count=99,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get('/api/developer-usage/?days=7')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['days'], 7)
+        self.assertEqual(data['request_count'], 8)
+        self.assertEqual(data['success_count'], 7)
+        self.assertEqual(data['client_error_count'], 1)
+        self.assertTrue(data['durable'])
+        self.assertFalse(data['billing_grade'])
+        self.assertEqual(len(data['usage']), 2)
+
+        bounded = self.client.get('/api/developer-usage/?days=999').json()
+        self.assertEqual(bounded['days'], 90)
+
+        invalid = self.client.get('/api/developer-usage/?days=not-a-number').json()
+        self.assertEqual(invalid['days'], 30)
 
     def test_developer_token_status_does_not_expose_existing_key(self):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')

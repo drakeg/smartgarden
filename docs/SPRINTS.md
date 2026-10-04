@@ -574,4 +574,27 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/developer-quota-status`
 
+**Status:** Complete — merged in PR #44.
+
+
+### Sprint 25 — Durable Developer API Usage Metering
+
+**Outcome:** Persist daily paid Developer API usage in PostgreSQL so historical reporting does not depend on Redis throttle history.
+
+**Acceptance criteria:**
+- Accepted paid Developer API viewset requests increment a durable daily usage bucket.
+- Daily usage buckets are unique per developer, date, and plan.
+- Plan is snapshotted so later plan changes do not rewrite historical usage.
+- Atomic database increments preserve counts across concurrent workers.
+- Usage tracks total requests plus success, client-error, and server-error response classes.
+- Authentication failures, entitlement denials, and HTTP 429 throttle rejections are not metered.
+- Metering is disabled when the developer paywall is disabled and bypassed for staff/superusers.
+- `GET /api/developer-usage/` requires authentication and returns the caller's own durable usage only.
+- The history window defaults to 30 days and is bounded to 1–90 days.
+- Responses explicitly distinguish durable reporting from invoice-authoritative billing data.
+- Regression tests cover metering, throttle exclusion, paywall-disabled behavior, plan changes, and history bounds.
+- A schema migration, README, and developer API documentation are included.
+
+**Branch:** `feature/durable-api-usage`
+
 **Status:** In review.
