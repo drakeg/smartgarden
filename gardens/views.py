@@ -5,21 +5,26 @@ import secrets
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
+from django.contrib.auth.decorators import login_required
 from .forms import RegistrationForm
 from django.http import JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
+from django.core.cache import caches
+from django.db.models import Sum
 from django.core import signing
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from rest_framework.authtoken.models import Token
 from django.views.decorators.http import require_http_methods
 
 from .device_templates import get_device_template, try_load_svg_and_map
 from .forms import GardenForm, PodForm, PodNoteForm
 from .models import Garden, Pod, PodNote, PodStatus
-from .models import GlobalNote
+from .models import DeveloperAccess, DeveloperApiUsageDaily, GlobalNote
 from .forms import GlobalNoteForm
 from .tasks import queue_or_send_templated_email
+from .api import DeveloperPlanRateThrottle
 
 EXPORT_VERSION = 1
 
@@ -221,6 +226,128 @@ def _apply_single_pod(garden_obj: Garden, item: dict) -> None:
 def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict]) -> None:
     for pod_item in pods_list:
         _apply_single_pod(garden_obj, pod_item)
+
+def _developer_dashboard_context(user) -> dict:
+    """Build a read-only snapshot of developer access, quota, usage, and token state."""
+    try:
+        access = user.developer_access
+    except DeveloperAccess.DoesNotExist:
+        access = None
+
+    paywall_enabled = bool(settings.API_PAYWALL_ENABLED)
+    admin_bypass = bool(user.is_staff or user.is_superuser)
+    entitlement_active = bool(access and access.has_access())
+    quota_applicable = paywall_enabled and entitlement_active and not admin_bypass
+
+    quota = {
+        "applicable": quota_applicable,
+        "request_rate": None,
+        "limit": None,
+        "used": None,
+        "remaining": None,
+        "window_seconds": None,
+        "retry_after_seconds": None,
+    }
+
+    if quota_applicable:
+        rate = settings.API_PLAN_THROTTLE_RATES.get(access.plan)
+        if rate:
+            throttle = DeveloperPlanRateThrottle()
+            throttle.rate = rate
+            throttle.num_requests, throttle.duration = throttle.parse_rate(rate)
+            key = throttle.cache_format % {
+                "scope": f"{throttle.scope}-{access.plan.lower()}",
+                "ident": str(user.pk),
+            }
+            now = throttle.timer()
+            history = throttle.cache.get(key, [])
+            active_history = [
+                timestamp for timestamp in history
+                if timestamp > now - throttle.duration
+            ]
+            remaining = max(throttle.num_requests - len(active_history), 0)
+            retry_after = None
+            if remaining == 0 and active_history:
+                retry_after = max(
+                    0,
+                    int(active_history[-1] + throttle.duration - now + 0.999),
+                )
+            quota.update({
+                "request_rate": rate,
+                "limit": throttle.num_requests,
+                "used": len(active_history),
+                "remaining": remaining,
+                "window_seconds": int(throttle.duration),
+                "retry_after_seconds": retry_after,
+            })
+
+    today = timezone.localdate()
+    start_date = today - timezone.timedelta(days=29)
+    usage_qs = DeveloperApiUsageDaily.objects.filter(
+        user=user,
+        usage_date__gte=start_date,
+        usage_date__lte=today,
+    )
+    totals = usage_qs.aggregate(
+        request_count=Sum("request_count"),
+        success_count=Sum("success_count"),
+        client_error_count=Sum("client_error_count"),
+        server_error_count=Sum("server_error_count"),
+    )
+
+    token = Token.objects.filter(user=user).only("created").first()
+
+    return {
+        "developer_access": access,
+        "paywall_enabled": paywall_enabled,
+        "admin_bypass": admin_bypass,
+        "entitlement_active": entitlement_active,
+        "effective_access": (not paywall_enabled) or admin_bypass or entitlement_active,
+        "quota": quota,
+        "usage_start_date": start_date,
+        "usage_end_date": today,
+        "usage_totals": {
+            "request_count": totals["request_count"] or 0,
+            "success_count": totals["success_count"] or 0,
+            "client_error_count": totals["client_error_count"] or 0,
+            "server_error_count": totals["server_error_count"] or 0,
+        },
+        "usage_rows": usage_qs.order_by("-usage_date", "plan")[:30],
+        "has_api_token": token is not None,
+        "api_token_created_at": token.created if token else None,
+    }
+
+
+@login_required(login_url="gardens:login")
+@require_http_methods(["GET", "POST"])
+def developer_dashboard(request):
+    """Developer self-service dashboard for access, usage, quota, and token lifecycle."""
+    new_token = None
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        password = request.POST.get("password", "")
+
+        if action not in {"rotate_token", "revoke_token"}:
+            messages.error(request, "Unknown developer token action.")
+        elif not password or not request.user.check_password(password):
+            messages.error(request, "Password confirmation failed.")
+        elif action == "rotate_token":
+            Token.objects.filter(user=request.user).delete()
+            token = Token.objects.create(user=request.user)
+            new_token = token.key
+            messages.success(
+                request,
+                "API token rotated. Copy the replacement token now; it will not be shown again.",
+            )
+        else:
+            Token.objects.filter(user=request.user).delete()
+            messages.success(request, "API token revoked.")
+
+    context = _developer_dashboard_context(request.user)
+    context["new_token"] = new_token
+    return render(request, "gardens/developer_dashboard.html", context)
+
 
 # ---------------------------
 # Auth + Home
