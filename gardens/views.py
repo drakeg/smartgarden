@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
@@ -10,7 +11,6 @@ from .forms import RegistrationForm
 from django.http import JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
-from django.core.cache import caches
 from django.db.models import Sum
 from django.core import signing
 from django.shortcuts import get_object_or_404, redirect, render
@@ -282,7 +282,7 @@ def _developer_dashboard_context(user) -> dict:
             })
 
     today = timezone.localdate()
-    start_date = today - timezone.timedelta(days=29)
+    start_date = today - timedelta(days=29)
     usage_qs = DeveloperApiUsageDaily.objects.filter(
         user=user,
         usage_date__gte=start_date,
