@@ -90,7 +90,7 @@
             <dd class="col-sm-7">{{ quota.window_seconds }} seconds</dd>
             <dt class="col-sm-5">Retry after</dt>
             <dd class="col-sm-7">
-              {% if quota.retry_after_seconds != None %}
+              {% if quota.retry_after_seconds %}
                 {{ quota.retry_after_seconds }} seconds
               {% else %}
                 —
