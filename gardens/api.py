@@ -2,7 +2,9 @@ from django.conf import settings
 from django.core.cache import caches
 from django.db.models import F, Sum
 from django.utils import timezone
+from django.http import HttpResponse
 from datetime import timedelta
+import csv
 import math
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
@@ -284,6 +286,55 @@ class DeveloperUsageStatusView(APIView):
                 for row in rows
             ],
         })
+
+
+class DeveloperUsageExportView(APIView):
+    """Export the signed-in developer's durable usage history as CSV."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            days = int(request.query_params.get('days', '30'))
+        except ValueError:
+            days = 30
+        days = min(max(days, 1), 90)
+
+        end_date = timezone.localdate()
+        start_date = end_date - timedelta(days=days - 1)
+        rows = DeveloperApiUsageDaily.objects.filter(
+            user=request.user,
+            usage_date__gte=start_date,
+            usage_date__lte=end_date,
+        ).order_by('usage_date', 'plan')
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = (
+            f'attachment; filename="smartgarden-api-usage-{start_date}-to-{end_date}.csv"'
+        )
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'date',
+            'plan',
+            'request_count',
+            'success_count',
+            'client_error_count',
+            'server_error_count',
+            'last_request_at',
+        ])
+        for row in rows:
+            writer.writerow([
+                row.usage_date.isoformat(),
+                row.plan,
+                row.request_count,
+                row.success_count,
+                row.client_error_count,
+                row.server_error_count,
+                row.last_request_at.isoformat() if row.last_request_at else '',
+            ])
+
+        return response
 
 
 class DeveloperUsageMeteringMixin:
