@@ -363,7 +363,7 @@ curl -X POST -d "username=alice&password=secret" http://localhost:8000/api-token
 curl -H "Authorization: Token <your-token>" http://localhost:8000/api/global-notes/
 ```
 
-The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`. Authenticated users can inspect developer entitlement at `/api/developer-access/`, current rolling quota usage at `/api/developer-quota/`, durable historical usage at `/api/developer-usage/`, and inspect/rotate/revoke their API token at `/api/developer-token/` with password confirmation for destructive changes.
+The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`. Authenticated users can inspect developer entitlement at `/api/developer-access/`, current rolling quota usage at `/api/developer-quota/`, durable historical usage at `/api/developer-usage/`, export their usage as CSV at `/api/developer-usage/export/`, and inspect/rotate/revoke their API token at `/api/developer-token/` with password confirmation for destructive changes.
 
 Garden, pod, and pod-note API endpoints require authentication and are scoped to the signed-in user's non-guest gardens. Cross-user objects are not exposed through those endpoints. Global notes remain publicly readable, but only their author can update or delete them.
 
