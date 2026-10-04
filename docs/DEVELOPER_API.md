@@ -112,6 +112,29 @@ Usage is recorded only when the developer paywall is enabled, the caller has an 
 
 This ledger is durable in PostgreSQL and survives Redis/cache resets, unlike `/api/developer-quota/`. It is intended for reporting, reconciliation, and future billing integration. Responses currently include `billing_grade: false`: final billable-event semantics, pricing, refunds/credits, and payment-provider reconciliation must be defined before these counters are treated as invoice-authoritative.
 
+## Usage reporting export
+
+Authenticated developers can export their own durable usage history as CSV:
+
+```http
+GET /api/developer-usage/export/
+GET /api/developer-usage/export/?days=7
+```
+
+The export uses the same 1–90 day window rules as the JSON usage endpoint and contains one row per date/plan bucket with:
+
+- date;
+- plan;
+- total request count;
+- success count;
+- client-error count;
+- server-error count;
+- last recorded request timestamp.
+
+The export is always scoped to the authenticated account. It does not expose billing identifiers or another developer's usage.
+
+Django admin also exposes `DeveloperApiUsageDaily` as a read-only reporting view for authorized staff/support users. Usage rows cannot be added, edited, or deleted through admin.
+
 ## Developer token lifecycle
 
 The standard `/api-token-auth/` endpoint can issue the account's DRF token after username/password authentication. Authenticated developers can also manage that token at:
