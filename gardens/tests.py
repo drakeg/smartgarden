@@ -160,7 +160,7 @@ class DeveloperDashboardTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Developer Dashboard')
         self.assertContains(resp, access.get_plan_display())
-        self.assertContains(resp, '10') if False else None
+        self.assertContains(resp, '20/minute')
         self.assertContains(resp, '7')
         self.assertContains(resp, 'Export 30-day CSV')
         self.assertNotContains(resp, token.key)
