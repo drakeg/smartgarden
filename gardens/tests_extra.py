@@ -28,6 +28,11 @@ class ExtraTests(TestCase):
         return output.getvalue()
 
     def _build_archive(self, manifest: dict, files: dict[str, bytes] | None = None) -> bytes:
+        manifest = dict(manifest)
+        manifest.setdefault(
+            "archive_format_version",
+            views_module.ARCHIVE_FORMAT_VERSION,
+        )
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("garden.json", json.dumps(manifest))
