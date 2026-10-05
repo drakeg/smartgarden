@@ -205,6 +205,11 @@ def _parse_archive_upload(upload) -> tuple[dict, dict[str, bytes]]:
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise ValueError("Garden archive contains invalid garden.json.") from exc
 
+            if data.get("archive_format_version") != ARCHIVE_FORMAT_VERSION:
+                raise ValueError(
+                    f"Unsupported garden archive format. Expected version={ARCHIVE_FORMAT_VERSION}."
+                )
+
             photo_files: dict[str, bytes] = {}
             referenced_photos = {
                 note.get("photo_file")
