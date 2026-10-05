@@ -61,12 +61,34 @@
       type="submit"
       name="action"
       value="reset"
-      hx-confirm="Reset this pod? Plant name, planted date, and status will be cleared. Notes and photos will be preserved."
+      hx-confirm="Reset this pod? Plant name, planted date, and status will be cleared. Notes, photos, and planting history will be preserved."
     >
       Reset Pod
     </button>
   </div>
 </form>
+
+<hr class="my-3">
+
+<div class="fw-semibold mb-2">Planting history</div>
+{% if pod.planting_cycles.all %}
+  <div class="vstack gap-2 mb-3">
+    {% for cycle in pod.planting_cycles.all|slice:":5" %}
+      <div class="border rounded-3 p-2 bg-white">
+        <div class="d-flex justify-content-between gap-2">
+          <strong>{{ cycle.plant_name|default:"Unnamed plant" }}</strong>
+          <span class="badge text-bg-secondary">{{ cycle.get_final_status_display }}</span>
+        </div>
+        <div class="muted small">
+          {% if cycle.planted_at %}Planted {{ cycle.planted_at }} · {% endif %}
+          Ended {{ cycle.ended_at }}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="muted small mb-3">No completed planting cycles yet.</div>
+{% endif %}
 
 <hr class="my-3">
 
