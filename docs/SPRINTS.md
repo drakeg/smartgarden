@@ -688,4 +688,28 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/planting-cycle-history`
 
+**Status:** Complete — merged in PR #49.
+
+
+### Sprint 30 — Garden Activity Timeline
+
+**Outcome:** Surface garden history in one chronological view so users can quickly review plantings, pod notes, photo notes, and completed planting cycles without opening each pod individually.
+
+**Acceptance criteria:**
+- Garden detail shows a newest-first activity timeline built from existing data.
+- Current planted dates appear as planting events.
+- Pod notes appear as note events.
+- Notes with photos are visibly identified without exposing private photo contents in the timeline.
+- Completed planting cycles appear as completion events with plant name and final status.
+- Timeline can be filtered by event type.
+- Timeline can be filtered by pod position.
+- Invalid filter values fall back safely to the unfiltered timeline.
+- Timeline is capped to the 50 newest matching events.
+- Existing garden ownership/guest access controls continue to scope all timeline data.
+- No new database table is required; timeline remains a derived read-only view.
+- Regression tests cover combined events, ordering, event-type filtering, pod filtering, and invalid-filter fallback.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/garden-activity-timeline`
+
 **Status:** In review.
