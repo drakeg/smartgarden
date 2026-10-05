@@ -218,4 +218,67 @@
 
 </div>
 
+<div class="card shadow-sm rounded-4 mt-4">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div>
+        <div class="fw-semibold">Garden Activity Timeline</div>
+        <div class="muted small">Newest notes, current plantings, and completed planting cycles.</div>
+      </div>
+      <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+          <label class="form-label small mb-1" for="activity_type">Event type</label>
+          <select id="activity_type" name="activity_type" class="form-select form-select-sm">
+            <option value="" {% if not activity_type %}selected{% endif %}>All</option>
+            <option value="planting" {% if activity_type == "planting" %}selected{% endif %}>Plantings</option>
+            <option value="note" {% if activity_type == "note" %}selected{% endif %}>Notes</option>
+            <option value="cycle" {% if activity_type == "cycle" %}selected{% endif %}>Completed cycles</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label small mb-1" for="activity_pod">Pod</label>
+          <select id="activity_pod" name="activity_pod" class="form-select form-select-sm">
+            <option value="" {% if not activity_pod %}selected{% endif %}>All pods</option>
+            {% for pod in pods %}
+              <option value="{{ pod.position }}" {% if activity_pod == pod.position|stringformat:"s" %}selected{% endif %}>Pod {{ pod.position }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" type="submit">Filter</button>
+        {% if activity_type or activity_pod %}
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'gardens:garden_detail' garden.id %}">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+
+    {% if activity_events %}
+      <div class="vstack gap-2">
+        {% for event in activity_events %}
+          <div class="border rounded-3 p-3 bg-white">
+            <div class="d-flex flex-wrap justify-content-between gap-2">
+              <div class="fw-semibold">{{ event.title }}</div>
+              <div class="muted small">{{ event.timestamp }}</div>
+            </div>
+            <div class="small mt-1" style="white-space: pre-wrap;">{{ event.detail }}</div>
+            <div class="mt-2 d-flex gap-2">
+              {% if event.type == "planting" %}
+                <span class="badge text-bg-success">Planting</span>
+              {% elif event.type == "cycle" %}
+                <span class="badge text-bg-secondary">Completed cycle</span>
+              {% else %}
+                <span class="badge text-bg-info">Note</span>
+              {% endif %}
+              {% if event.has_photo %}
+                <span class="badge text-bg-light border">Photo attached</span>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="muted">No activity matches these filters yet.</div>
+    {% endif %}
+  </div>
+</div>
+
 {% endblock %}

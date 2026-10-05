@@ -431,6 +431,73 @@ class ExtraTests(TestCase):
         pod.refresh_from_db()
         self.assertEqual(pod.plant_name, 'Parsley')
 
+    def test_garden_detail_activity_timeline_combines_notes_plantings_and_cycles(self):
+        user = user_model.objects.create_user(username='timelineowner', password='pass')
+        garden = user.gardens.create(name='Timeline Garden')
+        pod = garden.pods.create(
+            position=1,
+            plant_name='Basil',
+            planted_at=views_module.timezone.localdate(),
+            status=PodStatus.GROWING,
+        )
+        note = pod.notes.create(note='Trimmed roots today')
+        PodPlantingCycle.objects.create(
+            pod=pod,
+            plant_name='Lettuce',
+            planted_at=views_module.timezone.localdate() - views_module.timedelta(days=30),
+            ended_at=views_module.timezone.now() + views_module.timedelta(minutes=1),
+            final_status=PodStatus.HARVESTING,
+        )
+        self.client.force_login(user)
+
+        resp = self.client.get(reverse('gardens:garden_detail', args=[garden.id]))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Garden Activity Timeline')
+        self.assertContains(resp, 'Trimmed roots today')
+        self.assertContains(resp, 'Basil')
+        self.assertContains(resp, 'Lettuce')
+        events = resp.context['activity_events']
+        self.assertEqual(events[0]['type'], 'cycle')
+        self.assertEqual({event['type'] for event in events}, {'planting', 'note', 'cycle'})
+        self.assertEqual(note.pod_id, pod.id)
+
+    def test_garden_activity_timeline_filters_by_type_and_pod(self):
+        user = user_model.objects.create_user(username='timelinefilter', password='pass')
+        garden = user.gardens.create(name='Filtered Timeline')
+        pod1 = garden.pods.create(position=1, plant_name='Basil', planted_at=views_module.timezone.localdate())
+        pod2 = garden.pods.create(position=2, plant_name='Mint', planted_at=views_module.timezone.localdate())
+        pod1.notes.create(note='Pod one note')
+        pod2.notes.create(note='Pod two note')
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:garden_detail', args=[garden.id]),
+            {'activity_type': 'note', 'activity_pod': '2'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Pod two note')
+        self.assertNotContains(resp, 'Pod one note')
+        self.assertEqual(len(resp.context['activity_events']), 1)
+        self.assertEqual(resp.context['activity_events'][0]['pod_position'], 2)
+
+    def test_garden_activity_timeline_invalid_filters_fall_back_safely(self):
+        user = user_model.objects.create_user(username='timelineinvalid', password='pass')
+        garden = user.gardens.create(name='Invalid Timeline')
+        garden.pods.create(position=1, plant_name='Basil', planted_at=views_module.timezone.localdate())
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:garden_detail', args=[garden.id]),
+            {'activity_type': 'bogus', 'activity_pod': 'nope'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['activity_type'], '')
+        self.assertEqual(resp.context['activity_pod'], '')
+        self.assertTrue(resp.context['activity_events'])
+
     def test_garden_detail_shows_status_overview_counts(self):
         user = user_model.objects.create_user(username='overviewowner', password='pass')
         garden = user.gardens.create(name='Overview Garden')
