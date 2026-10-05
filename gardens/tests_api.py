@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, Pod
+from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, Pod, PodPlantingCycle, PodStatus
 
 user_model = get_user_model()
 
@@ -53,6 +53,44 @@ class ApiTests(APITestCase):
         resp = self.client.get('/api/gardens/?search=Beta')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json().get('results', []), [])
+
+    def test_pod_api_exposes_completed_planting_cycles_read_only(self):
+        garden = Garden.objects.create(owner=self.user, name='History API Garden')
+        pod = Pod.objects.create(garden=garden, position=1)
+        cycle = PodPlantingCycle.objects.create(
+            pod=pod,
+            plant_name='Mint',
+            planted_at=timezone.localdate() - timedelta(days=20),
+            final_status=PodStatus.HARVESTING,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get(f'/api/pods/{pod.id}/')
+
+        self.assertEqual(resp.status_code, 200)
+        history = resp.json()['planting_cycles']
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]['id'], cycle.id)
+        self.assertEqual(history[0]['plant_name'], 'Mint')
+        self.assertEqual(history[0]['final_status'], PodStatus.HARVESTING)
+
+        update = self.client.patch(
+            f'/api/pods/{pod.id}/',
+            {
+                'plant_name': 'Parsley',
+                'planting_cycles': [{
+                    'plant_name': 'Injected',
+                    'final_status': PodStatus.REMOVED,
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(update.status_code, 200)
+        pod.refresh_from_db()
+        cycle.refresh_from_db()
+        self.assertEqual(pod.plant_name, 'Parsley')
+        self.assertEqual(cycle.plant_name, 'Mint')
+        self.assertEqual(pod.planting_cycles.count(), 1)
 
     def test_garden_pod_and_note_apis_require_authentication(self):
         garden = Garden.objects.create(owner=self.user, name='Private')

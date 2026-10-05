@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from . import views as views_module
 
-from .models import Garden, PodStatus
+from .models import Garden, PodPlantingCycle, PodStatus
 
 user_model = get_user_model()
 
@@ -336,7 +336,54 @@ class ExtraTests(TestCase):
         self.assertIsNone(pod.planted_at)
         self.assertEqual(pod.status, PodStatus.EMPTY)
         self.assertTrue(pod.notes.filter(id=note.id, note='Keep this history').exists())
-        self.assertContains(reset_resp, 'Existing notes and photos were preserved.')
+        self.assertContains(reset_resp, 'Existing notes, photos, and planting history were preserved.')
+
+    def test_reset_active_pod_records_completed_planting_cycle(self):
+        user = user_model.objects.create_user(username='cycleowner', password='pass')
+        garden = user.gardens.create(name='Cycle Garden')
+        pod = garden.pods.create(
+            position=1,
+            plant_name='Basil',
+            planted_at=views_module.timezone.localdate() - views_module.timedelta(days=21),
+            status=PodStatus.HARVESTING,
+        )
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {'action': 'reset'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        pod.refresh_from_db()
+        cycle = pod.planting_cycles.get()
+        self.assertEqual(cycle.plant_name, 'Basil')
+        self.assertEqual(
+            cycle.planted_at,
+            views_module.timezone.localdate() - views_module.timedelta(days=21),
+        )
+        self.assertEqual(cycle.final_status, PodStatus.HARVESTING)
+        self.assertEqual(pod.plant_name, '')
+        self.assertIsNone(pod.planted_at)
+        self.assertEqual(pod.status, PodStatus.EMPTY)
+        self.assertContains(resp, 'planting history were preserved')
+        self.assertContains(resp, 'Planting history')
+        self.assertContains(resp, 'Basil')
+
+    def test_reset_empty_pod_does_not_create_cycle(self):
+        user = user_model.objects.create_user(username='emptycycle', password='pass')
+        garden = user.gardens.create(name='Empty Cycle Garden')
+        pod = garden.pods.create(position=1)
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse('gardens:pod_save', args=[garden.id, pod.position]),
+            {'action': 'reset'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(pod.planting_cycles.exists())
+        self.assertContains(resp, 'No completed planting cycles yet.')
 
     def test_guest_can_use_planting_actions_on_owned_garden(self):
         self.client.get(reverse('gardens:guest_start'))
@@ -707,6 +754,54 @@ class ExtraTests(TestCase):
                 imported_note.photo.close()
 
             note.photo.delete(save=False)
+
+    def test_archive_roundtrip_preserves_completed_planting_cycles(self):
+        user = user_model.objects.create_user(username='cyclearchive', password='pass')
+        garden = user.gardens.create(name='Cycle Archive', device_type='AHOPEGARDEN_12')
+        pod = garden.pods.create(position=1)
+        ended_at = views_module.timezone.now() - views_module.timedelta(days=2)
+        cycle = PodPlantingCycle.objects.create(
+            pod=pod,
+            plant_name='Lettuce',
+            planted_at=views_module.timezone.localdate() - views_module.timedelta(days=35),
+            ended_at=ended_at,
+            final_status=PodStatus.HARVESTING,
+        )
+        self.client.force_login(user)
+
+        export_resp = self.client.get(
+            reverse('gardens:garden_export_archive', args=[garden.id])
+        )
+        self.assertEqual(export_resp.status_code, 200)
+
+        with zipfile.ZipFile(io.BytesIO(export_resp.content)) as archive:
+            manifest = json.loads(archive.read('garden.json').decode('utf-8'))
+        history = manifest['pods'][0]['planting_history']
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]['plant_name'], 'Lettuce')
+        self.assertEqual(history[0]['final_status'], PodStatus.HARVESTING)
+
+        upload = SimpleUploadedFile(
+            'cycle-archive.zip',
+            export_resp.content,
+            content_type='application/zip',
+        )
+        import_resp = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': upload},
+            follow=True,
+        )
+        self.assertEqual(import_resp.status_code, 200)
+
+        imported = user.gardens.exclude(id=garden.id).get()
+        imported_cycle = imported.pods.get(position=1).planting_cycles.get()
+        self.assertEqual(imported_cycle.plant_name, cycle.plant_name)
+        self.assertEqual(imported_cycle.planted_at, cycle.planted_at)
+        self.assertEqual(imported_cycle.final_status, cycle.final_status)
+        self.assertEqual(
+            imported_cycle.ended_at.replace(microsecond=0),
+            cycle.ended_at.replace(microsecond=0),
+        )
 
     def test_legacy_json_export_remains_photo_free_and_importable(self):
         user = user_model.objects.create_user(username='legacyphoto', password='pass')

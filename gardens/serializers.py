@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Garden, Pod, PodNote, GlobalNote
+from .models import Garden, Pod, PodNote, PodPlantingCycle, GlobalNote
 
 
 user_model = get_user_model()
@@ -19,12 +19,26 @@ class PodNoteSerializer(serializers.ModelSerializer):
         fields = ("id", "pod", "created_at", "note", "photo")
 
 
+class PodPlantingCycleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PodPlantingCycle
+        fields = (
+            "id",
+            "plant_name",
+            "planted_at",
+            "final_status",
+            "ended_at",
+        )
+        read_only_fields = fields
+
+
 class PodSerializer(serializers.ModelSerializer):
     notes = PodNoteSerializer(many=True, read_only=True)
+    planting_cycles = PodPlantingCycleSerializer(many=True, read_only=True)
 
     class Meta:
         model = Pod
-        fields = ("id", "garden", "position", "plant_name", "planted_at", "status", "updated_at", "notes")
+        fields = ("id", "garden", "position", "plant_name", "planted_at", "status", "updated_at", "notes", "planting_cycles")
 
 
 class GardenSerializer(serializers.ModelSerializer):
