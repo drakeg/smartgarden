@@ -83,6 +83,31 @@ class Pod(models.Model):
     def __str__(self) -> str:
         return f"{self.garden.name} Pod {self.position}"
 
+class PodPlantingCycle(models.Model):
+    """Immutable snapshot of a completed planting cycle for a pod."""
+
+    pod = models.ForeignKey(
+        Pod,
+        on_delete=models.CASCADE,
+        related_name="planting_cycles",
+    )
+    plant_name = models.CharField(max_length=120, blank=True)
+    planted_at = models.DateField(null=True, blank=True)
+    ended_at = models.DateTimeField(default=timezone.now)
+    final_status = models.CharField(
+        max_length=20,
+        choices=PodStatus.choices,
+        default=PodStatus.EMPTY,
+    )
+
+    class Meta:
+        ordering = ["-ended_at", "-id"]
+
+    def __str__(self) -> str:
+        label = self.plant_name.strip() or "Unnamed plant"
+        return f"{self.pod} — {label} ended {self.ended_at.date()}"
+
+
 class PodNote(models.Model):
     pod = models.ForeignKey(Pod, on_delete=models.CASCADE, related_name="notes")
     created_at = models.DateTimeField(auto_now_add=True)
