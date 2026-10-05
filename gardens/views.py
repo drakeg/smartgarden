@@ -4,7 +4,7 @@ import io
 import json
 import secrets
 import zipfile
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from pathlib import PurePosixPath
 
 from django.contrib import messages
@@ -808,6 +808,64 @@ def garden_delete(request, garden_id: int):
 # Garden Detail (Owner OR Guest)
 # ---------------------------
 @require_http_methods(["GET"])
+def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position: str = "") -> list[dict]:
+    """Build a newest-first timeline from existing garden data."""
+    allowed_types = {"", "planting", "note", "cycle"}
+    if event_type not in allowed_types:
+        event_type = ""
+
+    try:
+        selected_position = int(pod_position) if pod_position else None
+    except (TypeError, ValueError):
+        selected_position = None
+
+    events: list[dict] = []
+    pods = garden.pods.all().prefetch_related("notes", "planting_cycles").order_by("position")
+    for pod in pods:
+        if selected_position is not None and pod.position != selected_position:
+            continue
+
+        if event_type in ("", "planting") and pod.planted_at:
+            planted_dt = timezone.make_aware(
+                datetime.combine(pod.planted_at, time.min),
+                timezone.get_current_timezone(),
+            )
+            events.append({
+                "type": "planting",
+                "timestamp": planted_dt,
+                "pod_position": pod.position,
+                "title": f"Pod {pod.position} planted",
+                "detail": pod.plant_name.strip() or "Unnamed plant",
+                "has_photo": False,
+            })
+
+        if event_type in ("", "note"):
+            for note in pod.notes.all():
+                events.append({
+                    "type": "note",
+                    "timestamp": note.created_at,
+                    "pod_position": pod.position,
+                    "title": f"Pod {pod.position} note",
+                    "detail": note.note,
+                    "has_photo": bool(note.photo),
+                })
+
+        if event_type in ("", "cycle"):
+            for cycle in pod.planting_cycles.all():
+                label = cycle.plant_name.strip() or "Unnamed plant"
+                events.append({
+                    "type": "cycle",
+                    "timestamp": cycle.ended_at,
+                    "pod_position": pod.position,
+                    "title": f"Pod {pod.position} cycle completed",
+                    "detail": f"{label} · {cycle.get_final_status_display()}",
+                    "has_photo": False,
+                })
+
+    events.sort(key=lambda event: event["timestamp"], reverse=True)
+    return events[:50]
+
+
 def garden_detail(request, garden_id: int):
     garden = _get_editable_garden_or_404(request, garden_id)
 
@@ -819,6 +877,14 @@ def garden_detail(request, garden_id: int):
     front = getattr(garden, "view_front", None) or "left"
 
     pods = list(garden.pods.all().order_by("position"))
+    activity_type = (request.GET.get("activity_type") or "").strip()
+    activity_pod = (request.GET.get("activity_pod") or "").strip()
+    activity_events = _garden_activity_timeline(garden, activity_type, activity_pod)
+    if activity_type not in {"", "planting", "note", "cycle"}:
+        activity_type = ""
+    if activity_pod and not activity_pod.isdigit():
+        activity_pod = ""
+
     status_overview = [
         {
             "value": value,
@@ -849,6 +915,9 @@ def garden_detail(request, garden_id: int):
         "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
         "front": front,               # "left" or "right"
         "status_overview": status_overview,
+        "activity_events": activity_events,
+        "activity_type": activity_type,
+        "activity_pod": activity_pod,
     })
 
 # ---------------------------
