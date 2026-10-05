@@ -26,7 +26,7 @@ from django.views.decorators.http import require_http_methods
 
 from .device_templates import get_device_template, try_load_svg_and_map
 from .forms import GardenForm, PodForm, PodNoteForm
-from .models import Garden, Pod, PodNote, PodStatus
+from .models import Garden, Pod, PodNote, PodPlantingCycle, PodStatus
 from .models import DeveloperAccess, DeveloperApiUsageDaily, GlobalNote
 from .forms import GlobalNoteForm
 from .tasks import queue_or_send_templated_email
@@ -154,6 +154,16 @@ def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNo
             archive_path = f"photos/pod-{pod.position}/note-{note.pk}{suffix}"
             note_payload["photo_file"] = archive_path
             photo_entries.append((archive_path, note))
+
+        pod_payload["planting_history"] = [
+            {
+                "plant_name": cycle.plant_name,
+                "planted_at": cycle.planted_at.isoformat() if cycle.planted_at else None,
+                "final_status": cycle.final_status,
+                "ended_at": cycle.ended_at.isoformat(),
+            }
+            for cycle in pod.planting_cycles.all().order_by("ended_at", "id")
+        ]
 
     return payload, photo_entries
 
@@ -330,6 +340,43 @@ def _apply_single_pod(garden_obj: Garden, item: dict, archive_photos: dict[str, 
 
     notes = item.get("notes") or []
     _apply_notes_to_pod(pod, notes, archive_photos)
+
+    history = item.get("planting_history") or []
+    if isinstance(history, list):
+        for cycle in history:
+            if not isinstance(cycle, dict):
+                continue
+
+            planted_at_value = None
+            planted_at_raw = cycle.get("planted_at")
+            if planted_at_raw:
+                try:
+                    planted_at_value = timezone.datetime.fromisoformat(planted_at_raw).date()
+                except (TypeError, ValueError):
+                    planted_at_value = None
+
+            ended_at_value = timezone.now()
+            ended_at_raw = cycle.get("ended_at")
+            if ended_at_raw:
+                try:
+                    ended_at_value = timezone.datetime.fromisoformat(ended_at_raw)
+                    if timezone.is_naive(ended_at_value):
+                        ended_at_value = timezone.make_aware(ended_at_value)
+                except (TypeError, ValueError):
+                    ended_at_value = timezone.now()
+
+            final_status = cycle.get("final_status")
+            valid_statuses = {value for value, _label in PodStatus.choices}
+            if final_status not in valid_statuses:
+                final_status = PodStatus.EMPTY
+
+            PodPlantingCycle.objects.create(
+                pod=pod,
+                plant_name=(cycle.get("plant_name") or "")[:120],
+                planted_at=planted_at_value,
+                ended_at=ended_at_value,
+                final_status=final_status,
+            )
 
 
 def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict], archive_photos: dict[str, bytes] | None = None) -> None:
@@ -833,11 +880,18 @@ def pod_save(request, garden_id: int, position: int):
     notice = None
 
     if action == "reset":
+        if pod.plant_name.strip() or pod.planted_at or pod.status != PodStatus.EMPTY:
+            PodPlantingCycle.objects.create(
+                pod=pod,
+                plant_name=pod.plant_name,
+                planted_at=pod.planted_at,
+                final_status=pod.status,
+            )
         pod.plant_name = ""
         pod.planted_at = None
         pod.status = PodStatus.EMPTY
         pod.save(update_fields=["plant_name", "planted_at", "status", "updated_at"])
-        notice = "Pod reset. Existing notes and photos were preserved."
+        notice = "Pod reset. Existing notes, photos, and planting history were preserved."
     else:
         form = PodForm(request.POST, instance=pod)
         if form.is_valid():
