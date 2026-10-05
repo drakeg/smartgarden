@@ -11,9 +11,10 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from .forms import RegistrationForm
-from django.http import JsonResponse, Http404
+from django.http import HttpResponse, JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Sum
 from django.core import signing
 from django.core.files.base import ContentFile
@@ -1008,6 +1009,33 @@ def garden_export_json(request, garden_id: int):
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
+def garden_export_archive(request, garden_id: int):
+    if not request.user.is_authenticated:
+        return redirect(GARDENS_LOGIN)
+
+    garden = Garden.objects.filter(id=garden_id, owner=request.user).first()
+    if not garden:
+        raise Http404("Garden not found.")
+
+    payload, photo_entries = _garden_to_archive_dict(garden)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "garden.json",
+            json.dumps(payload, indent=2).encode("utf-8"),
+        )
+        for archive_path, note in photo_entries:
+            note.photo.open("rb")
+            try:
+                archive.writestr(archive_path, note.photo.read())
+            finally:
+                note.photo.close()
+
+    filename = f"{garden.name.strip().replace(' ', '_')}_backup.zip"
+    response = HttpResponse(output.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
 @require_http_methods(["GET", "POST"])
 def garden_import_json(request):
     if not request.user.is_authenticated:
@@ -1022,24 +1050,24 @@ def garden_import_json(request):
         return redirect(GARDEN_IMPORT_JSON)
 
     try:
-        data = _parse_import_upload(upload)
+        data, archive_photos = _parse_garden_import(upload)
         garden_name, device_type, pods_data = _validate_import_data(data)
+        with transaction.atomic():
+            garden, template_count = _create_garden_from_import(
+                request.user,
+                garden_name,
+                device_type,
+            )
+
+            # Create baseline pods 1..template_count
+            for pos in range(1, template_count + 1):
+                Pod.objects.create(garden=garden, position=pos)
+
+            # Apply imported pod data and any validated archive photos.
+            _apply_imported_pods(garden, pods_data, archive_photos)
     except ValueError as exc:
         messages.error(request, str(exc))
         return redirect(GARDEN_IMPORT_JSON)
-
-    garden, template_count = _create_garden_from_import(
-        request.user,
-        garden_name,
-        device_type,
-    )
-
-    # Create baseline pods 1..template_count
-    for pos in range(1, template_count + 1):
-        Pod.objects.create(garden=garden, position=pos)
-
-    # Apply imported pod data
-    _apply_imported_pods(garden, pods_data)
 
     messages.success(request, f"Imported garden: {garden.name}")
     return redirect(GARDEN_DETAIL, garden_id=garden.id)
