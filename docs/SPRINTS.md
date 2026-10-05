@@ -665,4 +665,27 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/garden-archive-export`
 
+**Status:** Complete — merged in PR #48.
+
+
+### Sprint 29 — Planting Cycle History
+
+**Outcome:** Preserve durable planting-cycle history when a pod is reset so prior crops are not lost when the pod is reused.
+
+**Acceptance criteria:**
+- Resetting a non-empty pod records one completed planting-cycle snapshot before clearing the pod.
+- Completed cycles preserve plant name, planted date, final status, and end timestamp.
+- Resetting an already empty pod does not create empty/junk history rows.
+- Existing notes and photos remain unchanged by reset.
+- The pod side panel displays recent completed planting cycles.
+- Planting-cycle records are read-only in Django admin.
+- Pod API responses expose planting-cycle history read-only.
+- API clients cannot create or mutate planting-cycle history through pod writes.
+- Complete ZIP backups include planting-cycle history and restore it on import.
+- Legacy JSON export/import remains unchanged.
+- Regression tests cover active reset history, empty reset behavior, UI rendering, API read-only behavior, and ZIP backup/import preservation.
+- A schema migration, README, and sprint documentation are included.
+
+**Branch:** `feature/planting-cycle-history`
+
 **Status:** In review.
