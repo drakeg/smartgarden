@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, Pod, PodNote, GlobalNote
+from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, Pod, PodNote, PodPlantingCycle, GlobalNote
 
 class PodInline(admin.TabularInline):
     model = Pod
@@ -63,6 +63,23 @@ class DeveloperApiUsageDailyAdmin(admin.ModelAdmin):
         "server_error_count",
         "last_request_at",
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PodPlantingCycle)
+class PodPlantingCycleAdmin(admin.ModelAdmin):
+    list_display = ("pod", "plant_name", "planted_at", "final_status", "ended_at")
+    list_filter = ("final_status", "ended_at")
+    search_fields = ("pod__garden__name", "pod__plant_name", "plant_name")
+    readonly_fields = ("pod", "plant_name", "planted_at", "final_status", "ended_at")
 
     def has_add_permission(self, request):
         return False
