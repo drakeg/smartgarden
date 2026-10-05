@@ -617,4 +617,28 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/developer-usage-reporting`
 
+**Status:** Complete — merged in PR #46.
+
+
+### Sprint 27 — Developer Self-Service Dashboard
+
+**Outcome:** Consolidate Developer API access, quota, durable usage, export, and credential lifecycle into one authenticated web interface.
+
+**Acceptance criteria:**
+- `/account/developer/` requires authentication.
+- The dashboard shows paywall state, effective access, entitlement status, plan, expiration, and admin bypass.
+- Active paid plans show current shared-cache quota rate, usage, remaining requests, window duration, and retry timing.
+- The dashboard shows 30-day durable usage totals and recent daily/plan buckets.
+- A CSV export link uses the existing authenticated developer usage export endpoint.
+- Existing API token values are never displayed.
+- Issuing/rotating a token requires the current account password and returns the new token only in the immediate response.
+- Rotating invalidates the previous token immediately.
+- Revocation requires the current account password and removes the current token immediately.
+- Token-changing forms are POST-only and CSRF-protected.
+- The authenticated navigation exposes the Developer Dashboard.
+- Regression tests cover authentication, privacy, password confirmation, rotation, first-token issuance, revocation, quota/access rendering, and durable usage rendering.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/developer-dashboard`
+
 **Status:** In review.

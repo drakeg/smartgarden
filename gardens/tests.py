@@ -1,11 +1,14 @@
 from django.test import TestCase, Client, override_settings
 from django.contrib.sessions.backends.db import SessionStore
 from django.urls import reverse
+from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import DatabaseError
+from django.core.cache import caches
 from unittest.mock import patch
-from .models import GlobalNote
+from rest_framework.authtoken.models import Token
+from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, GlobalNote
 
 
 user_model = get_user_model()
@@ -111,3 +114,123 @@ class BasicAppTests(TestCase):
 		note = user.global_notes.create(title='Test tip', note='This plant fails in shade')
 		self.assertIn('Test tip', str(note))
 		self.assertEqual(GlobalNote.objects.count(), 1)
+
+
+class DeveloperDashboardTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = user_model.objects.create_user(
+            username='developer',
+            password='developer-pass',
+        )
+
+    def test_dashboard_requires_authentication(self):
+        resp = self.client.get(reverse('gardens:developer_dashboard'))
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse('gardens:login'), resp['Location'])
+
+    @override_settings(
+        API_PAYWALL_ENABLED=True,
+        API_PLAN_THROTTLE_RATES={
+            'STARTER': '10/minute',
+            'PRO': '20/minute',
+            'ENTERPRISE': '30/minute',
+        },
+    )
+    def test_dashboard_renders_access_quota_usage_and_never_existing_token_value(self):
+        access = DeveloperAccess.objects.create(
+            user=self.user,
+            plan=DeveloperPlan.PRO,
+            status=DeveloperAccessStatus.ACTIVE,
+        )
+        token = Token.objects.create(user=self.user)
+        DeveloperApiUsageDaily.objects.create(
+            user=self.user,
+            usage_date=timezone.localdate(),
+            plan=DeveloperPlan.PRO,
+            request_count=7,
+            success_count=6,
+            client_error_count=1,
+        )
+        caches['developer_api'].clear()
+        self.client.force_login(self.user)
+
+        resp = self.client.get(reverse('gardens:developer_dashboard'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Developer Dashboard')
+        self.assertContains(resp, access.get_plan_display())
+        self.assertContains(resp, '20/minute')
+        self.assertContains(resp, '7')
+        self.assertContains(resp, 'Export 30-day CSV')
+        self.assertNotContains(resp, token.key)
+
+    def test_dashboard_wrong_password_does_not_rotate_token(self):
+        token = Token.objects.create(user=self.user)
+        old_key = token.key
+        self.client.force_login(self.user)
+
+        resp = self.client.post(
+            reverse('gardens:developer_dashboard'),
+            {'action': 'rotate_token', 'password': 'wrong-password'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Password confirmation failed.')
+        self.assertTrue(Token.objects.filter(user=self.user, key=old_key).exists())
+        self.assertNotContains(resp, old_key)
+
+    def test_dashboard_rotation_invalidates_old_token_and_shows_new_token_once(self):
+        token = Token.objects.create(user=self.user)
+        old_key = token.key
+        self.client.force_login(self.user)
+
+        resp = self.client.post(
+            reverse('gardens:developer_dashboard'),
+            {'action': 'rotate_token', 'password': 'developer-pass'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        new_token = Token.objects.get(user=self.user)
+        self.assertNotEqual(new_token.key, old_key)
+        self.assertFalse(Token.objects.filter(key=old_key).exists())
+        self.assertContains(resp, new_token.key)
+        self.assertNotContains(resp, old_key)
+
+        followup = self.client.get(reverse('gardens:developer_dashboard'))
+        self.assertEqual(followup.status_code, 200)
+        self.assertNotContains(followup, new_token.key)
+
+    def test_dashboard_can_issue_first_token_with_password_confirmation(self):
+        self.client.force_login(self.user)
+
+        resp = self.client.post(
+            reverse('gardens:developer_dashboard'),
+            {'action': 'rotate_token', 'password': 'developer-pass'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        token = Token.objects.get(user=self.user)
+        self.assertContains(resp, token.key)
+
+    def test_dashboard_revocation_requires_password_and_removes_token(self):
+        token = Token.objects.create(user=self.user)
+        old_key = token.key
+        self.client.force_login(self.user)
+
+        denied = self.client.post(
+            reverse('gardens:developer_dashboard'),
+            {'action': 'revoke_token', 'password': 'wrong-password'},
+        )
+        self.assertEqual(denied.status_code, 200)
+        self.assertTrue(Token.objects.filter(key=old_key).exists())
+
+        revoked = self.client.post(
+            reverse('gardens:developer_dashboard'),
+            {'action': 'revoke_token', 'password': 'developer-pass'},
+        )
+        self.assertEqual(revoked.status_code, 200)
+        self.assertContains(revoked, 'API token revoked.')
+        self.assertFalse(Token.objects.filter(user=self.user).exists())
+        self.assertNotContains(revoked, old_key)
