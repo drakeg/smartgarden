@@ -807,7 +807,6 @@ def garden_delete(request, garden_id: int):
 # ---------------------------
 # Garden Detail (Owner OR Guest)
 # ---------------------------
-@require_http_methods(["GET"])
 def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position: str = "") -> list[dict]:
     """Build a newest-first timeline from existing garden data."""
     allowed_types = {"", "planting", "note", "cycle"}
