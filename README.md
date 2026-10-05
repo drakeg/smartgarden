@@ -12,6 +12,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - SVG and grid layout for pod placement
 - HTMX-powered side panel for quick pod editing
 - Inline pod-note add, edit, delete, and optional photo management
+- Complete garden backup ZIP export/import including pod-note photos, while preserving legacy JSON portability
 - Quick pod planting actions for "Plant Today" and confirmed reset while preserving note history
 - Garden-level pod status overview with counts for each growth state
 - Read-only public garden snapshots with pod status/age while keeping notes and photos private
@@ -365,6 +366,12 @@ curl -H "Authorization: Token <your-token>" http://localhost:8000/api/global-not
 
 The DRF router also provides endpoints for gardens, pods and pod-notes under `/api/`. Authenticated users can inspect developer entitlement at `/api/developer-access/`, current rolling quota usage at `/api/developer-quota/`, durable historical usage at `/api/developer-usage/`, export their usage as CSV at `/api/developer-usage/export/`, and inspect/rotate/revoke their API token at `/api/developer-token/` with password confirmation for destructive changes.
 The authenticated web UI also provides a consolidated Developer Dashboard at `/account/developer/` with entitlement, live quota, durable 30-day usage, CSV export, and password-confirmed token issue/rotation/revocation controls.
+
+Garden portability supports two formats:
+- legacy JSON export/import for garden, pod, and note text data;
+- complete ZIP backup/import containing `garden.json` plus referenced pod-note photos.
+
+ZIP imports validate archive paths, declared format version, total uncompressed size, per-photo size, and image contents before creating the new garden.
 
 Garden, pod, and pod-note API endpoints require authentication and are scoped to the signed-in user's non-guest gardens. Cross-user objects are not exposed through those endpoints. Global notes remain publicly readable, but only their author can update or delete them.
 

@@ -1,21 +1,27 @@
 from __future__ import annotations
 
+import io
 import json
 import secrets
+import zipfile
 from datetime import timedelta
+from pathlib import PurePosixPath
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from .forms import RegistrationForm
-from django.http import JsonResponse, Http404
+from django.http import HttpResponse, JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Sum
 from django.core import signing
+from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
+from PIL import Image
 from django.views.decorators.http import require_http_methods
 
 from .device_templates import get_device_template, try_load_svg_and_map
@@ -27,6 +33,9 @@ from .tasks import queue_or_send_templated_email
 from .api import DeveloperPlanRateThrottle
 
 EXPORT_VERSION = 1
+ARCHIVE_FORMAT_VERSION = 1
+MAX_ARCHIVE_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
+MAX_ARCHIVE_PHOTO_BYTES = 10 * 1024 * 1024
 
 # Common route / template constants to avoid duplicated literals
 GARDENS_HOME = "gardens:home"
@@ -98,6 +107,7 @@ def _guest_notes_remaining(garden: Garden) -> int:
     return max(0, GUEST_MAX_NOTES_TOTAL - total)
 
 def _garden_to_export_dict(garden: Garden) -> dict:
+    """Build the stable legacy JSON export payload (photos intentionally excluded)."""
     pods_payload: list[dict] = []
     for pod in garden.pods.all().order_by("position"):
         notes_payload: list[dict] = []
@@ -105,12 +115,9 @@ def _garden_to_export_dict(garden: Garden) -> dict:
             notes_payload.append({
                 "created_at": n.created_at.isoformat(),
                 "note": n.note,
-                # Photos intentionally omitted in MVP export
-                # "photo": n.photo.url if n.photo else None,
             })
 
         pods_payload.append({
-            # Common route / template constants to avoid duplicated literals
             "position": pod.position,
             "plant_name": pod.plant_name,
             "planted_at": pod.planted_at.isoformat() if pod.planted_at else None,
@@ -127,6 +134,30 @@ def _garden_to_export_dict(garden: Garden) -> dict:
     }
 
 
+def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNote]]]:
+    """Build the archive manifest and list of note photos to include."""
+    payload = _garden_to_export_dict(garden)
+    payload["archive_format_version"] = ARCHIVE_FORMAT_VERSION
+    photo_entries: list[tuple[str, PodNote]] = []
+
+    pods_by_position = {
+        pod.position: pod
+        for pod in garden.pods.all().prefetch_related("notes").order_by("position")
+    }
+    for pod_payload in payload["pods"]:
+        pod = pods_by_position[pod_payload["position"]]
+        notes = list(pod.notes.all().order_by("created_at"))
+        for note_payload, note in zip(pod_payload["notes"], notes, strict=False):
+            if not note.photo:
+                continue
+            suffix = PurePosixPath(note.photo.name).suffix.lower() or ".img"
+            archive_path = f"photos/pod-{pod.position}/note-{note.pk}{suffix}"
+            note_payload["photo_file"] = archive_path
+            photo_entries.append((archive_path, note))
+
+    return payload, photo_entries
+
+
 # ---------------------------
 # Import helpers
 # ---------------------------
@@ -136,6 +167,80 @@ def _parse_import_upload(upload) -> dict:
         return json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("That file is not valid JSON.") from exc
+
+
+def _safe_archive_photo_path(path: str) -> bool:
+    candidate = PurePosixPath(path)
+    return (
+        bool(path)
+        and not candidate.is_absolute()
+        and ".." not in candidate.parts
+        and len(candidate.parts) >= 2
+        and candidate.parts[0] == "photos"
+    )
+
+
+def _validate_image_bytes(data: bytes) -> None:
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.verify()
+    except Exception as exc:
+        raise ValueError("Archive contains an invalid photo.") from exc
+
+
+def _parse_archive_upload(upload) -> tuple[dict, dict[str, bytes]]:
+    try:
+        with zipfile.ZipFile(upload) as archive:
+            infos = [info for info in archive.infolist() if not info.is_dir()]
+            total_uncompressed = sum(info.file_size for info in infos)
+            if total_uncompressed > MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+                raise ValueError("Garden archive is too large.")
+
+            names = {info.filename for info in infos}
+            if "garden.json" not in names:
+                raise ValueError("Garden archive is missing garden.json.")
+
+            try:
+                data = json.loads(archive.read("garden.json").decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError("Garden archive contains invalid garden.json.") from exc
+
+            if data.get("archive_format_version") != ARCHIVE_FORMAT_VERSION:
+                raise ValueError(
+                    f"Unsupported garden archive format. Expected version={ARCHIVE_FORMAT_VERSION}."
+                )
+
+            photo_files: dict[str, bytes] = {}
+            referenced_photos = {
+                note.get("photo_file")
+                for pod in data.get("pods", [])
+                if isinstance(pod, dict)
+                for note in pod.get("notes", [])
+                if isinstance(note, dict) and note.get("photo_file")
+            }
+
+            for photo_path in referenced_photos:
+                if not isinstance(photo_path, str) or not _safe_archive_photo_path(photo_path):
+                    raise ValueError("Garden archive contains an unsafe photo path.")
+                if photo_path not in names:
+                    raise ValueError("Garden archive is missing a referenced photo.")
+                info = archive.getinfo(photo_path)
+                if info.file_size > MAX_ARCHIVE_PHOTO_BYTES:
+                    raise ValueError("Garden archive contains an oversized photo.")
+                photo_data = archive.read(photo_path)
+                _validate_image_bytes(photo_data)
+                photo_files[photo_path] = photo_data
+
+            return data, photo_files
+    except zipfile.BadZipFile as exc:
+        raise ValueError("That file is not a valid garden archive.") from exc
+
+
+def _parse_garden_import(upload) -> tuple[dict, dict[str, bytes]]:
+    filename = (getattr(upload, "name", "") or "").lower()
+    if filename.endswith(".zip"):
+        return _parse_archive_upload(upload)
+    return _parse_import_upload(upload), {}
 
 
 def _validate_import_data(data: dict) -> tuple[str, str, list]:
@@ -175,7 +280,7 @@ def _get_pod_position(item: dict) -> int | None:
     return pos
 
 
-def _apply_notes_to_pod(pod: Pod, notes: list) -> None:
+def _apply_notes_to_pod(pod: Pod, notes: list, archive_photos: dict[str, bytes] | None = None) -> None:
     if not isinstance(notes, list):
         return
     for n in notes:
@@ -194,10 +299,14 @@ def _apply_notes_to_pod(pod: Pod, notes: list) -> None:
                 created_at = timezone.now()
 
         note_obj = PodNote.objects.create(pod=pod, note=note_text)
+        photo_path = n.get("photo_file")
+        if photo_path and archive_photos and photo_path in archive_photos:
+            filename = PurePosixPath(photo_path).name
+            note_obj.photo.save(filename, ContentFile(archive_photos[photo_path]), save=True)
         PodNote.objects.filter(id=note_obj.id).update(created_at=created_at)
 
 
-def _apply_single_pod(garden_obj: Garden, item: dict) -> None:
+def _apply_single_pod(garden_obj: Garden, item: dict, archive_photos: dict[str, bytes] | None = None) -> None:
     pos = _get_pod_position(item)
     if pos is None:
         return
@@ -220,12 +329,12 @@ def _apply_single_pod(garden_obj: Garden, item: dict) -> None:
     pod.save()
 
     notes = item.get("notes") or []
-    _apply_notes_to_pod(pod, notes)
+    _apply_notes_to_pod(pod, notes, archive_photos)
 
 
-def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict]) -> None:
+def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict], archive_photos: dict[str, bytes] | None = None) -> None:
     for pod_item in pods_list:
-        _apply_single_pod(garden_obj, pod_item)
+        _apply_single_pod(garden_obj, pod_item, archive_photos)
 
 def _developer_dashboard_context(user) -> dict:
     """Build a read-only snapshot of developer access, quota, usage, and token state."""
@@ -905,6 +1014,33 @@ def garden_export_json(request, garden_id: int):
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
+def garden_export_archive(request, garden_id: int):
+    if not request.user.is_authenticated:
+        return redirect(GARDENS_LOGIN)
+
+    garden = Garden.objects.filter(id=garden_id, owner=request.user).first()
+    if not garden:
+        raise Http404("Garden not found.")
+
+    payload, photo_entries = _garden_to_archive_dict(garden)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "garden.json",
+            json.dumps(payload, indent=2).encode("utf-8"),
+        )
+        for archive_path, note in photo_entries:
+            note.photo.open("rb")
+            try:
+                archive.writestr(archive_path, note.photo.read())
+            finally:
+                note.photo.close()
+
+    filename = f"{garden.name.strip().replace(' ', '_')}_backup.zip"
+    response = HttpResponse(output.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
 @require_http_methods(["GET", "POST"])
 def garden_import_json(request):
     if not request.user.is_authenticated:
@@ -919,24 +1055,24 @@ def garden_import_json(request):
         return redirect(GARDEN_IMPORT_JSON)
 
     try:
-        data = _parse_import_upload(upload)
+        data, archive_photos = _parse_garden_import(upload)
         garden_name, device_type, pods_data = _validate_import_data(data)
+        with transaction.atomic():
+            garden, template_count = _create_garden_from_import(
+                request.user,
+                garden_name,
+                device_type,
+            )
+
+            # Create baseline pods 1..template_count
+            for pos in range(1, template_count + 1):
+                Pod.objects.create(garden=garden, position=pos)
+
+            # Apply imported pod data and any validated archive photos.
+            _apply_imported_pods(garden, pods_data, archive_photos)
     except ValueError as exc:
         messages.error(request, str(exc))
         return redirect(GARDEN_IMPORT_JSON)
-
-    garden, template_count = _create_garden_from_import(
-        request.user,
-        garden_name,
-        device_type,
-    )
-
-    # Create baseline pods 1..template_count
-    for pos in range(1, template_count + 1):
-        Pod.objects.create(garden=garden, position=pos)
-
-    # Apply imported pod data
-    _apply_imported_pods(garden, pods_data)
 
     messages.success(request, f"Imported garden: {garden.name}")
     return redirect(GARDEN_DETAIL, garden_id=garden.id)

@@ -37,6 +37,9 @@
     <a class="btn btn-outline-primary btn-sm" href="{% url 'gardens:garden_export_json' garden.id %}">
       Export JSON
     </a>
+    <a class="btn btn-outline-success btn-sm" href="{% url 'gardens:garden_export_archive' garden.id %}">
+      Backup ZIP
+    </a>
     
     {% if is_guest %}
       <button class="btn btn-sm btn-outline-secondary disabled" aria-disabled="true" title="Guests cannot change the public link">Guest — public link disabled</button>

@@ -31,6 +31,7 @@ urlpatterns = [
 
     # import/export
     path("gardens/<int:garden_id>/export.json", views.garden_export_json, name="garden_export_json"),
+    path("gardens/<int:garden_id>/backup.zip", views.garden_export_archive, name="garden_export_archive"),
     path("gardens/import/", views.garden_import_json, name="garden_import_json"),
 
     # (flip view removed) 

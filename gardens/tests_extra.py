@@ -1,5 +1,10 @@
+import io
 import json
+import tempfile
+import zipfile
 from unittest.mock import patch
+
+from PIL import Image
 
 from django.core import mail, signing
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -16,6 +21,24 @@ user_model = get_user_model()
 class ExtraTests(TestCase):
     def setUp(self):
         self.client = Client()
+
+    def _tiny_png(self) -> bytes:
+        output = io.BytesIO()
+        Image.new("RGB", (2, 2)).save(output, format="PNG")
+        return output.getvalue()
+
+    def _build_archive(self, manifest: dict, files: dict[str, bytes] | None = None) -> bytes:
+        manifest = dict(manifest)
+        manifest.setdefault(
+            "archive_format_version",
+            views_module.ARCHIVE_FORMAT_VERSION,
+        )
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("garden.json", json.dumps(manifest))
+            for path, content in (files or {}).items():
+                archive.writestr(path, content)
+        return output.getvalue()
 
     def test_registration_creates_user_and_logs_in(self):
         resp = self.client.post(reverse('gardens:register'), {
@@ -634,6 +657,174 @@ class ExtraTests(TestCase):
             pod = imported.pods.get(position=pos)
             self.assertEqual(pod.plant_name, f'Plant{pos}')
             self.assertEqual(list(pod.notes.values_list('note', flat=True)), [f'Note{pos}'])
+
+    def test_archive_export_import_roundtrip_restores_note_photo(self):
+        user = user_model.objects.create_user(username='archiveuser', password='pass')
+        garden = user.gardens.create(name='Photo Garden', device_type='AHOPEGARDEN_12')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        png = self._tiny_png()
+
+        with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            note = pod.notes.create(
+                note='Photo note',
+                photo=SimpleUploadedFile('leaf.png', png, content_type='image/png'),
+            )
+            self.client.force_login(user)
+
+            export_resp = self.client.get(
+                reverse('gardens:garden_export_archive', args=[garden.id])
+            )
+            self.assertEqual(export_resp.status_code, 200)
+            self.assertEqual(export_resp['Content-Type'], 'application/zip')
+            self.assertIn('Photo_Garden_backup.zip', export_resp['Content-Disposition'])
+
+            with zipfile.ZipFile(io.BytesIO(export_resp.content)) as archive:
+                manifest = json.loads(archive.read('garden.json').decode('utf-8'))
+                photo_ref = manifest['pods'][0]['notes'][0]['photo_file']
+                self.assertTrue(photo_ref.startswith('photos/pod-1/'))
+                self.assertEqual(archive.read(photo_ref), png)
+
+            upload = SimpleUploadedFile(
+                'photo-garden.zip',
+                export_resp.content,
+                content_type='application/zip',
+            )
+            import_resp = self.client.post(
+                reverse('gardens:garden_import_json'),
+                {'import_file': upload},
+                follow=True,
+            )
+            self.assertEqual(import_resp.status_code, 200)
+
+            imported = user.gardens.exclude(id=garden.id).get()
+            imported_note = imported.pods.get(position=1).notes.get()
+            self.assertEqual(imported_note.note, 'Photo note')
+            self.assertTrue(imported_note.photo.name)
+            imported_note.photo.open('rb')
+            try:
+                self.assertEqual(imported_note.photo.read(), png)
+            finally:
+                imported_note.photo.close()
+
+            note.photo.delete(save=False)
+
+    def test_legacy_json_export_remains_photo_free_and_importable(self):
+        user = user_model.objects.create_user(username='legacyphoto', password='pass')
+        garden = user.gardens.create(name='Legacy Garden', device_type='AHOPEGARDEN_12')
+        pod = garden.pods.create(position=1)
+        png = self._tiny_png()
+
+        with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            note = pod.notes.create(
+                note='Legacy note',
+                photo=SimpleUploadedFile('legacy.png', png, content_type='image/png'),
+            )
+            self.client.force_login(user)
+
+            response = self.client.get(reverse('gardens:garden_export_json', args=[garden.id]))
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertNotIn('photo_file', payload['pods'][0]['notes'][0])
+
+            upload = SimpleUploadedFile(
+                'legacy.json',
+                json.dumps(payload).encode('utf-8'),
+                content_type='application/json',
+            )
+            imported_resp = self.client.post(
+                reverse('gardens:garden_import_json'),
+                {'import_file': upload},
+                follow=True,
+            )
+            self.assertEqual(imported_resp.status_code, 200)
+            imported = user.gardens.exclude(id=garden.id).get()
+            self.assertFalse(imported.pods.get(position=1).notes.get().photo)
+
+            note.photo.delete(save=False)
+
+    def test_archive_import_rejects_unsafe_photo_path(self):
+        user = user_model.objects.create_user(username='unsafezip', password='pass')
+        self.client.force_login(user)
+        manifest = {
+            'version': views_module.EXPORT_VERSION,
+            'garden_name': 'Unsafe',
+            'device_type': 'AHOPEGARDEN_12',
+            'pods': [{
+                'position': 1,
+                'notes': [{'note': 'bad', 'photo_file': '../evil.png'}],
+            }],
+        }
+        archive_bytes = self._build_archive(
+            manifest,
+            {'../evil.png': self._tiny_png()},
+        )
+
+        response = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': SimpleUploadedFile('unsafe.zip', archive_bytes)},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'unsafe photo path')
+        self.assertFalse(user.gardens.exists())
+
+    def test_archive_import_rejects_missing_referenced_photo(self):
+        user = user_model.objects.create_user(username='missingphoto', password='pass')
+        self.client.force_login(user)
+        manifest = {
+            'version': views_module.EXPORT_VERSION,
+            'garden_name': 'Missing',
+            'device_type': 'AHOPEGARDEN_12',
+            'pods': [{
+                'position': 1,
+                'notes': [{'note': 'missing', 'photo_file': 'photos/pod-1/missing.png'}],
+            }],
+        }
+
+        response = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': SimpleUploadedFile('missing.zip', self._build_archive(manifest))},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'missing a referenced photo')
+        self.assertFalse(user.gardens.exists())
+
+    def test_archive_import_rejects_invalid_or_oversized_photo(self):
+        user = user_model.objects.create_user(username='badphoto', password='pass')
+        self.client.force_login(user)
+        manifest = {
+            'version': views_module.EXPORT_VERSION,
+            'garden_name': 'Bad Photo',
+            'device_type': 'AHOPEGARDEN_12',
+            'pods': [{
+                'position': 1,
+                'notes': [{'note': 'bad', 'photo_file': 'photos/pod-1/bad.png'}],
+            }],
+        }
+
+        invalid_archive = self._build_archive(
+            manifest,
+            {'photos/pod-1/bad.png': b'not-an-image'},
+        )
+        invalid = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': SimpleUploadedFile('invalid.zip', invalid_archive)},
+            follow=True,
+        )
+        self.assertContains(invalid, 'invalid photo')
+        self.assertFalse(user.gardens.exists())
+
+        with patch.object(views_module, 'MAX_ARCHIVE_PHOTO_BYTES', 4):
+            oversized = self.client.post(
+                reverse('gardens:garden_import_json'),
+                {'import_file': SimpleUploadedFile('oversized.zip', invalid_archive)},
+                follow=True,
+            )
+        self.assertContains(oversized, 'oversized photo')
+        self.assertFalse(user.gardens.exists())
 
     def test_import_missing_optional_fields_uses_defaults(self):
         user = user_model.objects.create_user(username='defaultsuser', password='pass')

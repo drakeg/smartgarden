@@ -641,4 +641,28 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/developer-dashboard`
 
+**Status:** Complete — merged in PR #47.
+
+
+### Sprint 28 — Complete Garden Backup Export
+
+**Outcome:** Extend garden portability beyond text-only JSON by adding a photo-preserving ZIP backup format without breaking existing JSON exports/imports.
+
+**Acceptance criteria:**
+- Existing JSON export/import behavior remains backward-compatible and continues to exclude photo binaries.
+- Authenticated garden owners can download a complete ZIP backup containing `garden.json` plus referenced pod-note photos.
+- Archive manifests declare an explicit archive format version.
+- The existing import page accepts both legacy `.json` exports and complete `.zip` backups.
+- ZIP imports restore note text, timestamps, and referenced photos into the new garden.
+- ZIP imports reject unsafe traversal/absolute photo paths.
+- ZIP imports reject missing referenced photos.
+- ZIP imports enforce total uncompressed and per-photo size limits.
+- ZIP imports verify image payloads before saving them.
+- Garden creation/import is atomic at the database level.
+- UI clearly distinguishes legacy JSON export from complete ZIP backup.
+- Regression tests cover photo round-trip, JSON compatibility, unsafe paths, missing files, invalid images, and photo size limits.
+- README, import UI, garden detail actions, and sprint documentation are updated.
+
+**Branch:** `feature/garden-archive-export`
+
 **Status:** In review.
