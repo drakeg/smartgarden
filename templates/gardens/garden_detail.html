@@ -90,6 +90,46 @@
   </div>
 </div>
 
+<div class="card shadow-sm rounded-4 mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+      <div>
+        <div class="fw-semibold">Care Reminders</div>
+        <div class="muted small">Open tasks across this garden.</div>
+      </div>
+      {% if overdue_reminder_count %}
+        <span class="badge text-bg-danger">{{ overdue_reminder_count }} overdue</span>
+      {% endif %}
+    </div>
+    {% if open_reminders %}
+      <div class="vstack gap-2">
+        {% for reminder in open_reminders|slice:":8" %}
+          <div class="d-flex flex-wrap justify-content-between gap-2 border rounded-3 p-2 {% if reminder.due_date < today %}border-danger bg-danger-subtle{% else %}bg-white{% endif %}">
+            <div>
+              <strong>Pod {{ reminder.pod.position }} · {{ reminder.title }}</strong>
+              <div class="small {% if reminder.due_date < today %}text-danger fw-semibold{% else %}muted{% endif %}">
+                Due {{ reminder.due_date }}{% if reminder.due_date < today %} · overdue{% endif %}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary"
+              hx-get="{% url 'gardens:pod_panel' garden.id reminder.pod.position %}"
+              hx-target="#sidepanel"
+              hx-swap="innerHTML"
+            >Open Pod</button>
+          </div>
+        {% endfor %}
+      </div>
+      {% if open_reminders|length > 8 %}
+        <div class="muted small mt-2">Showing the next 8 of {{ open_reminders|length }} open reminders.</div>
+      {% endif %}
+    {% else %}
+      <div class="muted">No open care reminders.</div>
+    {% endif %}
+  </div>
+</div>
+
 <div class="row g-3">
 
   <!-- LEFT COLUMN: Device Layout -->
@@ -233,6 +273,7 @@
             <option value="planting" {% if activity_type == "planting" %}selected{% endif %}>Plantings</option>
             <option value="note" {% if activity_type == "note" %}selected{% endif %}>Notes</option>
             <option value="cycle" {% if activity_type == "cycle" %}selected{% endif %}>Completed cycles</option>
+            <option value="reminder" {% if activity_type == "reminder" %}selected{% endif %}>Completed reminders</option>
           </select>
         </div>
         <div>
@@ -265,6 +306,8 @@
                 <span class="badge text-bg-success">Planting</span>
               {% elif event.type == "cycle" %}
                 <span class="badge text-bg-secondary">Completed cycle</span>
+              {% elif event.type == "reminder" %}
+                <span class="badge text-bg-primary">Completed reminder</span>
               {% else %}
                 <span class="badge text-bg-info">Note</span>
               {% endif %}
