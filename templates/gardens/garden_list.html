@@ -90,6 +90,14 @@
               <span class="badge rounded-pill text-bg-light border">
                 Total <strong>{{ summary.total_count }}</strong>
               </span>
+              <span class="badge rounded-pill text-bg-light border">
+                Reminders <strong>{{ summary.reminder_open_count }}</strong>
+              </span>
+              {% if summary.reminder_overdue_count %}
+                <span class="badge rounded-pill text-bg-danger">
+                  Overdue <strong>{{ summary.reminder_overdue_count }}</strong>
+                </span>
+              {% endif %}
             </div>
 
             <div class="muted small mb-3">
