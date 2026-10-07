@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, Pod, PodNote, PodPlantingCycle, GlobalNote
+from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, Pod, PodCareReminder, PodNote, PodPlantingCycle, GlobalNote
 
 class PodInline(admin.TabularInline):
     model = Pod
@@ -17,6 +17,13 @@ class PodAdmin(admin.ModelAdmin):
     list_display = ("garden", "position", "plant_name", "status", "planted_at", "updated_at")
     list_filter = ("status", "garden__device_type")
     search_fields = ("plant_name", "garden__name")
+
+@admin.register(PodCareReminder)
+class PodCareReminderAdmin(admin.ModelAdmin):
+    list_display = ("title", "pod", "due_date", "completed_at", "created_at")
+    list_filter = ("due_date", "completed_at")
+    search_fields = ("title", "pod__plant_name", "pod__garden__name")
+
 
 @admin.register(PodNote)
 class PodNoteAdmin(admin.ModelAdmin):
