@@ -25,8 +25,8 @@ from PIL import Image
 from django.views.decorators.http import require_http_methods
 
 from .device_templates import get_device_template, try_load_svg_and_map
-from .forms import GardenForm, PodForm, PodNoteForm
-from .models import Garden, Pod, PodNote, PodPlantingCycle, PodStatus
+from .forms import GardenForm, PodCareReminderForm, PodForm, PodNoteForm
+from .models import Garden, Pod, PodCareReminder, PodNote, PodPlantingCycle, PodStatus
 from .models import DeveloperAccess, DeveloperApiUsageDaily, GlobalNote
 from .forms import GlobalNoteForm
 from .tasks import queue_or_send_templated_email
@@ -142,7 +142,7 @@ def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNo
 
     pods_by_position = {
         pod.position: pod
-        for pod in garden.pods.all().prefetch_related("notes").order_by("position")
+        for pod in garden.pods.all().prefetch_related("notes", "care_reminders").order_by("position")
     }
     for pod_payload in payload["pods"]:
         pod = pods_by_position[pod_payload["position"]]
@@ -163,6 +163,16 @@ def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNo
                 "ended_at": cycle.ended_at.isoformat(),
             }
             for cycle in pod.planting_cycles.all().order_by("ended_at", "id")
+        ]
+
+        pod_payload["care_reminders"] = [
+            {
+                "title": reminder.title,
+                "due_date": reminder.due_date.isoformat(),
+                "completed_at": reminder.completed_at.isoformat() if reminder.completed_at else None,
+                "created_at": reminder.created_at.isoformat(),
+            }
+            for reminder in pod.care_reminders.all().order_by("due_date", "id")
         ]
 
     return payload, photo_entries
@@ -376,6 +386,50 @@ def _apply_single_pod(garden_obj: Garden, item: dict, archive_photos: dict[str, 
                 planted_at=planted_at_value,
                 ended_at=ended_at_value,
                 final_status=final_status,
+            )
+
+    reminders = item.get("care_reminders") or []
+    if isinstance(reminders, list):
+        for reminder in reminders:
+            if not isinstance(reminder, dict):
+                continue
+            title = (reminder.get("title") or "").strip()[:160]
+            if not title:
+                continue
+            due_date_raw = reminder.get("due_date")
+            try:
+                due_date_value = timezone.datetime.fromisoformat(due_date_raw).date()
+            except (TypeError, ValueError):
+                continue
+
+            completed_at_value = None
+            completed_at_raw = reminder.get("completed_at")
+            if completed_at_raw:
+                try:
+                    completed_at_value = timezone.datetime.fromisoformat(completed_at_raw)
+                    if timezone.is_naive(completed_at_value):
+                        completed_at_value = timezone.make_aware(completed_at_value)
+                except (TypeError, ValueError):
+                    completed_at_value = None
+
+            created_at_value = timezone.now()
+            created_at_raw = reminder.get("created_at")
+            if created_at_raw:
+                try:
+                    created_at_value = timezone.datetime.fromisoformat(created_at_raw)
+                    if timezone.is_naive(created_at_value):
+                        created_at_value = timezone.make_aware(created_at_value)
+                except (TypeError, ValueError):
+                    created_at_value = timezone.now()
+
+            reminder_obj = PodCareReminder.objects.create(
+                pod=pod,
+                title=title,
+                due_date=due_date_value,
+                completed_at=completed_at_value,
+            )
+            PodCareReminder.objects.filter(pk=reminder_obj.pk).update(
+                created_at=created_at_value,
             )
 
 
@@ -710,7 +764,7 @@ def garden_list(request):
 
     gardens = list(
         gardens_qs
-        .prefetch_related("pods")
+        .prefetch_related("pods__care_reminders")
         .order_by("-created_at")
     )
     garden_summaries = []
@@ -722,11 +776,22 @@ def garden_list(request):
         )
         harvesting_count = sum(1 for pod in pods if pod.status == PodStatus.HARVESTING)
         latest_update = max((pod.updated_at for pod in pods), default=None)
+        today = timezone.localdate()
+        reminders = [
+            reminder
+            for pod in pods
+            for reminder in pod.care_reminders.all()
+            if not reminder.completed_at
+        ]
         garden_summaries.append({
             "garden": garden,
             "total_count": len(pods),
             "active_count": active_count,
             "harvesting_count": harvesting_count,
+            "reminder_open_count": len(reminders),
+            "reminder_overdue_count": sum(
+                1 for reminder in reminders if reminder.due_date < today
+            ),
             "latest_update": latest_update,
         })
 
@@ -809,7 +874,7 @@ def garden_delete(request, garden_id: int):
 # ---------------------------
 def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position: str = "") -> list[dict]:
     """Build a newest-first timeline from existing garden data."""
-    allowed_types = {"", "planting", "note", "cycle"}
+    allowed_types = {"", "planting", "note", "cycle", "reminder"}
     if event_type not in allowed_types:
         event_type = ""
 
@@ -819,7 +884,7 @@ def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position
         selected_position = None
 
     events: list[dict] = []
-    pods = garden.pods.all().prefetch_related("notes", "planting_cycles").order_by("position")
+    pods = garden.pods.all().prefetch_related("notes", "planting_cycles", "care_reminders").order_by("position")
     for pod in pods:
         if selected_position is not None and pod.position != selected_position:
             continue
@@ -861,6 +926,19 @@ def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position
                     "has_photo": False,
                 })
 
+        if event_type in ("", "reminder"):
+            for reminder in pod.care_reminders.all():
+                if not reminder.completed_at:
+                    continue
+                events.append({
+                    "type": "reminder",
+                    "timestamp": reminder.completed_at,
+                    "pod_position": pod.position,
+                    "title": f"Pod {pod.position} care reminder completed",
+                    "detail": reminder.title,
+                    "has_photo": False,
+                })
+
     events.sort(key=lambda event: event["timestamp"], reverse=True)
     return events[:50]
 
@@ -879,7 +957,7 @@ def garden_detail(request, garden_id: int):
     activity_type = (request.GET.get("activity_type") or "").strip()
     activity_pod = (request.GET.get("activity_pod") or "").strip()
     activity_events = _garden_activity_timeline(garden, activity_type, activity_pod)
-    if activity_type not in {"", "planting", "note", "cycle"}:
+    if activity_type not in {"", "planting", "note", "cycle", "reminder"}:
         activity_type = ""
     if activity_pod and not activity_pod.isdigit():
         activity_pod = ""
@@ -892,6 +970,16 @@ def garden_detail(request, garden_id: int):
         }
         for value, label in PodStatus.choices
     ]
+
+    open_reminders = list(
+        PodCareReminder.objects.filter(
+            pod__garden=garden,
+            completed_at__isnull=True,
+        ).select_related("pod").order_by("due_date", "pod__position", "id")
+    )
+    overdue_reminder_count = sum(
+        1 for reminder in open_reminders if reminder.due_date < timezone.localdate()
+    )
 
     # Build rows for grid fallback (3 columns x 4 rows for Ahopegarden 12)
     # If you later add other devices, put cols on the template or infer from device.
@@ -917,6 +1005,8 @@ def garden_detail(request, garden_id: int):
         "activity_events": activity_events,
         "activity_type": activity_type,
         "activity_pod": activity_pod,
+        "open_reminders": open_reminders,
+        "overdue_reminder_count": overdue_reminder_count,
     })
 
 # ---------------------------
@@ -1052,6 +1142,73 @@ def pod_note_edit(request, garden_id: int, position: int, note_id: int):
         "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
         "edit_error_note_id": note.id if form.errors else None,
         "edit_note_form": form if form.errors else None,
+    })
+
+
+@require_http_methods(["POST"])
+def pod_care_reminder_add(request, garden_id: int, position: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    form = PodCareReminderForm(request.POST)
+    notice = None
+    error = None
+    if form.is_valid():
+        reminder = form.save(commit=False)
+        reminder.pod = pod
+        reminder.save()
+        notice = "Care reminder added."
+    else:
+        error = "Enter a reminder title and valid due date."
+
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": PodForm(instance=pod),
+        "note_form": PodNoteForm(),
+        "today": timezone.localdate(),
+        "notice": notice,
+        "error": error,
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+    })
+
+
+@require_http_methods(["POST"])
+def pod_care_reminder_toggle(request, garden_id: int, position: int, reminder_id: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    reminder = get_object_or_404(PodCareReminder, id=reminder_id, pod=pod)
+    reminder.completed_at = None if reminder.completed_at else timezone.now()
+    reminder.save(update_fields=["completed_at"])
+
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": PodForm(instance=pod),
+        "note_form": PodNoteForm(),
+        "today": timezone.localdate(),
+        "notice": "Care reminder reopened." if reminder.completed_at is None else "Care reminder completed.",
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+    })
+
+
+@require_http_methods(["POST"])
+def pod_care_reminder_delete(request, garden_id: int, position: int, reminder_id: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    reminder = get_object_or_404(PodCareReminder, id=reminder_id, pod=pod)
+    reminder.delete()
+
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": PodForm(instance=pod),
+        "note_form": PodNoteForm(),
+        "today": timezone.localdate(),
+        "notice": "Care reminder deleted.",
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
     })
 
 
