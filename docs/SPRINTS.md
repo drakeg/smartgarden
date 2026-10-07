@@ -712,4 +712,29 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/garden-activity-timeline`
 
+**Status:** Complete — merged in PR #50.
+
+
+### Sprint 31 — Pod Care Reminders
+
+**Outcome:** Add lightweight future-care tracking so growers can record upcoming pod tasks and quickly see what is due or overdue.
+
+**Acceptance criteria:**
+- Pod-scoped reminders include a title, due date, creation timestamp, and optional completion timestamp.
+- Owners and browser-scoped guest gardens can add reminders using existing garden access controls.
+- Reminders can be completed, reopened, and deleted from the pod side panel.
+- Overdue reminders are clearly highlighted.
+- Garden detail shows the next open reminders across pods and an overdue count.
+- My Gardens summaries show open and overdue reminder counts.
+- Completed reminders appear in the filterable garden activity timeline.
+- Public garden snapshots do not expose private reminder contents.
+- Pod API responses expose reminders read-only; nested pod writes cannot create or mutate reminder records.
+- Complete ZIP backups include reminder state and restore it on import.
+- Legacy JSON export/import remains unchanged.
+- Django admin supports reminder review.
+- Regression tests cover reminder lifecycle, ownership, dashboard visibility, public privacy, API read-only behavior, and ZIP backup/import preservation.
+- A schema migration, README, and sprint documentation are included.
+
+**Branch:** `feature/pod-care-reminders`
+
 **Status:** In review.
