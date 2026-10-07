@@ -108,6 +108,34 @@ class PodPlantingCycle(models.Model):
         return f"{self.pod} — {label} ended {self.ended_at.date()}"
 
 
+class PodCareReminder(models.Model):
+    """A pod-scoped care task with an optional completion timestamp."""
+
+    pod = models.ForeignKey(
+        Pod,
+        on_delete=models.CASCADE,
+        related_name="care_reminders",
+    )
+    title = models.CharField(max_length=160)
+    due_date = models.DateField(db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["completed_at", "due_date", "id"]
+
+    @property
+    def is_completed(self) -> bool:
+        return self.completed_at is not None
+
+    @property
+    def is_overdue(self) -> bool:
+        return not self.is_completed and self.due_date < timezone.localdate()
+
+    def __str__(self) -> str:
+        return f"{self.pod} — {self.title} due {self.due_date}"
+
+
 class PodNote(models.Model):
     pod = models.ForeignKey(Pod, on_delete=models.CASCADE, related_name="notes")
     created_at = models.DateTimeField(auto_now_add=True)
