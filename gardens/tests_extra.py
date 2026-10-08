@@ -1101,8 +1101,12 @@ class ExtraTests(TestCase):
         detail_resp = self.client.get(reverse('gardens:garden_detail', args=[garden.id]))
         self.assertContains(detail_resp, 'Overdue task')
         self.assertContains(detail_resp, 'Upcoming task')
-        self.assertNotContains(detail_resp, 'Done task')
+        self.assertEqual(
+            [reminder.title for reminder in detail_resp.context['open_reminders']],
+            ['Overdue task', 'Upcoming task'],
+        )
         self.assertEqual(detail_resp.context['overdue_reminder_count'], 1)
+        self.assertContains(detail_resp, 'Done task')  # completed reminders remain in activity history
 
     def test_care_reminder_actions_enforce_garden_ownership(self):
         owner = user_model.objects.create_user(username='reminderowner2', password='pass')
