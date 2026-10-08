@@ -70,6 +70,80 @@
 
 <hr class="my-3">
 
+<div class="fw-semibold mb-2">Care reminders</div>
+<form
+  class="mb-3"
+  hx-post="{% url 'gardens:pod_care_reminder_add' garden.id pod.position %}"
+  hx-target="#sidepanel"
+  hx-swap="innerHTML"
+>
+  {% csrf_token %}
+  <label class="form-label small" for="reminder_title_{{ pod.position }}">Reminder</label>
+  <input
+    id="reminder_title_{{ pod.position }}"
+    class="form-control mb-2"
+    type="text"
+    name="title"
+    maxlength="160"
+    required
+    placeholder="Change nutrients… prune roots… check harvest…"
+  >
+  <label class="form-label small" for="reminder_due_{{ pod.position }}">Due date</label>
+  <input
+    id="reminder_due_{{ pod.position }}"
+    class="form-control mb-2"
+    type="date"
+    name="due_date"
+    required
+  >
+  <button class="btn btn-outline-primary w-100" type="submit">Add Reminder</button>
+</form>
+
+{% if pod.care_reminders.all %}
+  <div class="vstack gap-2 mb-3">
+    {% for reminder in pod.care_reminders.all %}
+      <div class="border rounded-3 p-2 {% if reminder.completed_at %}bg-light{% elif reminder.due_date < today %}border-danger bg-danger-subtle{% else %}bg-white{% endif %}">
+        <div class="d-flex justify-content-between gap-2">
+          <div>
+            <div class="{% if reminder.completed_at %}text-decoration-line-through muted{% else %}fw-semibold{% endif %}">
+              {{ reminder.title }}
+            </div>
+            <div class="small {% if not reminder.completed_at and reminder.due_date < today %}text-danger fw-semibold{% else %}muted{% endif %}">
+              Due {{ reminder.due_date }}
+              {% if reminder.completed_at %} · completed {{ reminder.completed_at }}{% elif reminder.due_date < today %} · overdue{% endif %}
+            </div>
+          </div>
+          <div class="d-flex gap-1">
+            <form
+              hx-post="{% url 'gardens:pod_care_reminder_toggle' garden.id pod.position reminder.id %}"
+              hx-target="#sidepanel"
+              hx-swap="innerHTML"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-success">
+                {% if reminder.completed_at %}Reopen{% else %}Complete{% endif %}
+              </button>
+            </form>
+            <form
+              hx-post="{% url 'gardens:pod_care_reminder_delete' garden.id pod.position reminder.id %}"
+              hx-target="#sidepanel"
+              hx-swap="innerHTML"
+              hx-confirm="Delete this reminder?"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="muted small mb-3">No care reminders yet.</div>
+{% endif %}
+
+<hr class="my-3">
+
 <div class="fw-semibold mb-2">Planting history</div>
 {% if pod.planting_cycles.all %}
   <div class="vstack gap-2 mb-3">

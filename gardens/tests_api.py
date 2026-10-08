@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, Pod, PodPlantingCycle, PodStatus
+from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, Pod, PodCareReminder, PodPlantingCycle, PodStatus
 
 user_model = get_user_model()
 
@@ -53,6 +53,42 @@ class ApiTests(APITestCase):
         resp = self.client.get('/api/gardens/?search=Beta')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json().get('results', []), [])
+
+    def test_pod_api_exposes_care_reminders_read_only(self):
+        garden = Garden.objects.create(owner=self.user, name='Reminder API Garden')
+        pod = Pod.objects.create(garden=garden, position=1)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Check water level',
+            due_date=timezone.localdate() - timedelta(days=1),
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get(f'/api/pods/{pod.id}/')
+
+        self.assertEqual(resp.status_code, 200)
+        reminders = resp.json()['care_reminders']
+        self.assertEqual(len(reminders), 1)
+        self.assertEqual(reminders[0]['id'], reminder.id)
+        self.assertEqual(reminders[0]['title'], 'Check water level')
+        self.assertFalse(reminders[0]['is_completed'])
+        self.assertTrue(reminders[0]['is_overdue'])
+
+        update = self.client.patch(
+            f'/api/pods/{pod.id}/',
+            {
+                'plant_name': 'Parsley',
+                'care_reminders': [{
+                    'title': 'Injected reminder',
+                    'due_date': timezone.localdate().isoformat(),
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(update.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertEqual(reminder.title, 'Check water level')
+        self.assertEqual(pod.care_reminders.count(), 1)
 
     def test_pod_api_exposes_completed_planting_cycles_read_only(self):
         garden = Garden.objects.create(owner=self.user, name='History API Garden')

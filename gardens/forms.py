@@ -1,5 +1,5 @@
 from django import forms
-from .models import Garden, Pod, PodNote
+from .models import Garden, Pod, PodCareReminder, PodNote
 from .models import GlobalNote
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import get_user_model
@@ -58,6 +58,19 @@ class PodForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _apply_bootstrap_classes(self)
+
+class PodCareReminderForm(forms.ModelForm):
+    class Meta:
+        model = PodCareReminder
+        fields = ["title", "due_date"]
+        widgets = {
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _apply_bootstrap_classes(self)
+
 
 class PodNoteForm(forms.ModelForm):
     class Meta:

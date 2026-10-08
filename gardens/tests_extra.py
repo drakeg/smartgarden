@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from . import views as views_module
 
-from .models import Garden, PodPlantingCycle, PodStatus
+from .models import Garden, PodCareReminder, PodPlantingCycle, PodStatus
 
 user_model = get_user_model()
 
@@ -1018,6 +1018,189 @@ class ExtraTests(TestCase):
         self.assertEqual(imported.pods.count(), 12)
         self.assertEqual(imported.pods.get(position=1).plant_name, '')
         self.assertEqual(imported.pods.get(position=2).plant_name, 'Basil')
+
+    def test_owner_can_add_complete_reopen_and_delete_care_reminder(self):
+        user = user_model.objects.create_user(username='reminderowner', password='pass')
+        garden = user.gardens.create(name='Reminder Garden')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        self.client.force_login(user)
+
+        add_resp = self.client.post(
+            reverse('gardens:pod_care_reminder_add', args=[garden.id, pod.position]),
+            {'title': 'Change nutrients', 'due_date': views_module.timezone.localdate()},
+        )
+        self.assertEqual(add_resp.status_code, 200)
+        reminder = pod.care_reminders.get()
+        self.assertEqual(reminder.title, 'Change nutrients')
+        self.assertContains(add_resp, 'Care reminder added.')
+
+        complete_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_toggle',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        self.assertEqual(complete_resp.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertIsNotNone(reminder.completed_at)
+        self.assertContains(complete_resp, 'Care reminder completed.')
+
+        detail = self.client.get(reverse('gardens:garden_detail', args=[garden.id]))
+        self.assertContains(detail, 'Completed reminder')
+        self.assertContains(detail, 'Change nutrients')
+
+        reopen_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_toggle',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        reminder.refresh_from_db()
+        self.assertIsNone(reminder.completed_at)
+        self.assertContains(reopen_resp, 'Care reminder reopened.')
+
+        delete_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_delete',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        self.assertEqual(delete_resp.status_code, 200)
+        self.assertFalse(PodCareReminder.objects.filter(id=reminder.id).exists())
+        self.assertContains(delete_resp, 'Care reminder deleted.')
+
+    def test_garden_list_and_detail_show_open_and_overdue_reminders(self):
+        user = user_model.objects.create_user(username='reminderdashboard', password='pass')
+        garden = user.gardens.create(name='Reminder Dashboard')
+        pod = garden.pods.create(position=1)
+        today = views_module.timezone.localdate()
+        PodCareReminder.objects.create(
+            pod=pod,
+            title='Overdue task',
+            due_date=today - views_module.timedelta(days=1),
+        )
+        PodCareReminder.objects.create(
+            pod=pod,
+            title='Upcoming task',
+            due_date=today + views_module.timedelta(days=2),
+        )
+        PodCareReminder.objects.create(
+            pod=pod,
+            title='Done task',
+            due_date=today - views_module.timedelta(days=3),
+            completed_at=views_module.timezone.now(),
+        )
+        self.client.force_login(user)
+
+        list_resp = self.client.get(reverse('gardens:garden_list'))
+        summary = list_resp.context['garden_summaries'][0]
+        self.assertEqual(summary['reminder_open_count'], 2)
+        self.assertEqual(summary['reminder_overdue_count'], 1)
+        self.assertContains(list_resp, 'Overdue')
+
+        detail_resp = self.client.get(reverse('gardens:garden_detail', args=[garden.id]))
+        self.assertContains(detail_resp, 'Overdue task')
+        self.assertContains(detail_resp, 'Upcoming task')
+        self.assertEqual(
+            [reminder.title for reminder in detail_resp.context['open_reminders']],
+            ['Overdue task', 'Upcoming task'],
+        )
+        self.assertEqual(detail_resp.context['overdue_reminder_count'], 1)
+        self.assertContains(detail_resp, 'Done task')  # completed reminders remain in activity history
+
+    def test_care_reminder_actions_enforce_garden_ownership(self):
+        owner = user_model.objects.create_user(username='reminderowner2', password='pass')
+        other = user_model.objects.create_user(username='reminderother2', password='pass')
+        garden = owner.gardens.create(name='Private Reminder Garden')
+        pod = garden.pods.create(position=1)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Private task',
+            due_date=views_module.timezone.localdate(),
+        )
+        self.client.force_login(other)
+
+        add_resp = self.client.post(
+            reverse('gardens:pod_care_reminder_add', args=[garden.id, pod.position]),
+            {'title': 'Injected', 'due_date': views_module.timezone.localdate()},
+        )
+        toggle_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_toggle',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        delete_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_delete',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        self.assertEqual(add_resp.status_code, 404)
+        self.assertEqual(toggle_resp.status_code, 404)
+        self.assertEqual(delete_resp.status_code, 404)
+        reminder.refresh_from_db()
+        self.assertIsNone(reminder.completed_at)
+
+    def test_public_snapshot_does_not_expose_private_care_reminders(self):
+        user = user_model.objects.create_user(username='reminderpublic', password='pass')
+        garden = user.gardens.create(name='Public Reminder Garden', is_public=True)
+        garden.ensure_share_slug()
+        pod = garden.pods.create(position=1, plant_name='Mint')
+        PodCareReminder.objects.create(
+            pod=pod,
+            title='Secret nutrient task',
+            due_date=views_module.timezone.localdate(),
+        )
+
+        resp = self.client.get(reverse('gardens:garden_public', args=[garden.share_slug]))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'Secret nutrient task')
+
+    def test_archive_roundtrip_preserves_care_reminders(self):
+        user = user_model.objects.create_user(username='reminderarchive', password='pass')
+        garden = user.gardens.create(name='Reminder Archive', device_type='AHOPEGARDEN_12')
+        pod = garden.pods.create(position=1)
+        due_date = views_module.timezone.localdate() + views_module.timedelta(days=4)
+        completed_at = views_module.timezone.now() - views_module.timedelta(hours=3)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Check roots',
+            due_date=due_date,
+            completed_at=completed_at,
+        )
+        self.client.force_login(user)
+
+        export_resp = self.client.get(
+            reverse('gardens:garden_export_archive', args=[garden.id])
+        )
+        with zipfile.ZipFile(io.BytesIO(export_resp.content)) as archive:
+            manifest = json.loads(archive.read('garden.json').decode('utf-8'))
+        payload = manifest['pods'][0]['care_reminders'][0]
+        self.assertEqual(payload['title'], 'Check roots')
+        self.assertEqual(payload['due_date'], due_date.isoformat())
+
+        upload = SimpleUploadedFile(
+            'reminder-archive.zip',
+            export_resp.content,
+            content_type='application/zip',
+        )
+        import_resp = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': upload},
+            follow=True,
+        )
+        self.assertEqual(import_resp.status_code, 200)
+
+        imported = user.gardens.exclude(id=garden.id).get()
+        restored = imported.pods.get(position=1).care_reminders.get()
+        self.assertEqual(restored.title, reminder.title)
+        self.assertEqual(restored.due_date, reminder.due_date)
+        self.assertEqual(
+            restored.completed_at.replace(microsecond=0),
+            reminder.completed_at.replace(microsecond=0),
+        )
 
     def test_guest_note_cap_enforced(self):
         # Start guest session and find garden/pod
