@@ -1,4 +1,3 @@
-from celery.schedules import crontab
 """
 Django settings for smartgarden project.
 
@@ -12,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+from celery.schedules import crontab
 import logging
 from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
