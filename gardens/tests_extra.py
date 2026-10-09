@@ -14,6 +14,7 @@ from django.contrib.auth import get_user_model
 from . import views as views_module
 
 from .models import Garden, PodCareReminder, PodPlantingCycle, PodStatus
+from .tasks import send_due_care_reminder_digests
 
 user_model = get_user_model()
 
@@ -1201,6 +1202,161 @@ class ExtraTests(TestCase):
             restored.completed_at.replace(microsecond=0),
             reminder.completed_at.replace(microsecond=0),
         )
+
+    def test_owner_can_opt_in_care_reminder_email_notification(self):
+        user = user_model.objects.create_user(
+            username='reminderemailoptin',
+            password='pass',
+            email='grower@example.com',
+        )
+        garden = user.gardens.create(name='Email Reminder Garden')
+        pod = garden.pods.create(position=1)
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse('gardens:pod_care_reminder_add', args=[garden.id, pod.position]),
+            {
+                'title': 'Check nutrients',
+                'due_date': views_module.timezone.localdate(),
+                'email_notification_enabled': 'on',
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        reminder = pod.care_reminders.get()
+        self.assertTrue(reminder.email_notification_enabled)
+        self.assertIsNone(reminder.last_notified_on)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEFAULT_FROM_EMAIL='noreply@example.com',
+        CARE_REMINDER_EMAILS_ENABLED=True,
+        SITE_BASE_URL='https://garden.example.com',
+    )
+    def test_due_care_reminder_digest_sends_once_per_user_per_day(self):
+        user = user_model.objects.create_user(
+            username='digestuser',
+            password='pass',
+            email='grower@example.com',
+        )
+        garden = user.gardens.create(name='Digest Garden')
+        pod1 = garden.pods.create(position=1)
+        pod2 = garden.pods.create(position=2)
+        today = views_module.timezone.localdate()
+
+        due = PodCareReminder.objects.create(
+            pod=pod1,
+            title='Change nutrients',
+            due_date=today,
+            email_notification_enabled=True,
+        )
+        overdue = PodCareReminder.objects.create(
+            pod=pod2,
+            title='Trim roots',
+            due_date=today - views_module.timedelta(days=1),
+            email_notification_enabled=True,
+        )
+        PodCareReminder.objects.create(
+            pod=pod1,
+            title='No email',
+            due_date=today,
+            email_notification_enabled=False,
+        )
+        PodCareReminder.objects.create(
+            pod=pod1,
+            title='Future task',
+            due_date=today + views_module.timedelta(days=1),
+            email_notification_enabled=True,
+        )
+        PodCareReminder.objects.create(
+            pod=pod1,
+            title='Already done',
+            due_date=today - views_module.timedelta(days=2),
+            completed_at=views_module.timezone.now(),
+            email_notification_enabled=True,
+        )
+
+        sent = send_due_care_reminder_digests()
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ['grower@example.com'])
+        self.assertIn('Change nutrients', message.body)
+        self.assertIn('Trim roots', message.body)
+        self.assertIn('(overdue)', message.body)
+        self.assertIn('https://garden.example.com/gardens/', message.body)
+        self.assertNotIn('No email', message.body)
+        self.assertNotIn('Future task', message.body)
+        self.assertNotIn('Already done', message.body)
+
+        due.refresh_from_db()
+        overdue.refresh_from_db()
+        self.assertEqual(due.last_notified_on, today)
+        self.assertEqual(overdue.last_notified_on, today)
+
+        second = send_due_care_reminder_digests()
+        self.assertEqual(second, 0)
+        self.assertEqual(len(mail.outbox), 1)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        CARE_REMINDER_EMAILS_ENABLED=False,
+    )
+    def test_care_reminder_digest_global_switch_defaults_off(self):
+        user = user_model.objects.create_user(
+            username='digestoff',
+            password='pass',
+            email='off@example.com',
+        )
+        garden = user.gardens.create(name='Off Garden')
+        pod = garden.pods.create(position=1)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Should stay silent',
+            due_date=views_module.timezone.localdate(),
+            email_notification_enabled=True,
+        )
+
+        sent = send_due_care_reminder_digests()
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(len(mail.outbox), 0)
+        reminder.refresh_from_db()
+        self.assertIsNone(reminder.last_notified_on)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        CARE_REMINDER_EMAILS_ENABLED=True,
+    )
+    def test_care_reminder_digest_skips_accounts_without_email_and_guest_gardens(self):
+        no_email = user_model.objects.create_user(username='noemaildigest', password='pass')
+        garden = no_email.gardens.create(name='No Email Garden')
+        pod = garden.pods.create(position=1)
+        PodCareReminder.objects.create(
+            pod=pod,
+            title='No destination',
+            due_date=views_module.timezone.localdate(),
+            email_notification_enabled=True,
+        )
+
+        guest = Garden.objects.create(
+            name='Guest Digest Garden',
+            is_guest=True,
+            guest_token='digest-guest',
+        )
+        guest_pod = guest.pods.create(position=1)
+        PodCareReminder.objects.create(
+            pod=guest_pod,
+            title='Guest reminder',
+            due_date=views_module.timezone.localdate(),
+            email_notification_enabled=True,
+        )
+
+        sent = send_due_care_reminder_digests()
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_guest_note_cap_enforced(self):
         # Start guest session and find garden/pod
