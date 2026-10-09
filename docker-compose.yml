@@ -44,6 +44,26 @@ services:
       redis:
         condition: service_healthy
 
+  celery-beat:
+    build: .
+    profiles: ["async-email"]
+    command: celery -A smartgarden beat --loglevel=info
+    volumes:
+      - .:/app:cached
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=replace-me
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_TASK_ALWAYS_EAGER=False
+      - CARE_REMINDER_EMAILS_ENABLED=${CARE_REMINDER_EMAILS_ENABLED:-False}
+      - CARE_REMINDER_EMAIL_HOUR=${CARE_REMINDER_EMAIL_HOUR:-8}
+      - TIME_ZONE=${TIME_ZONE:-UTC}
+      - SITE_BASE_URL=${SITE_BASE_URL:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+
   # Optional Postgres service (uncomment to use Postgres in development)
   # db:
   #   image: postgres:15
