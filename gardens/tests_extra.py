@@ -1170,6 +1170,8 @@ class ExtraTests(TestCase):
             title='Check roots',
             due_date=due_date,
             completed_at=completed_at,
+            email_notification_enabled=True,
+            last_notified_on=views_module.timezone.localdate(),
         )
         self.client.force_login(user)
 
@@ -1181,6 +1183,11 @@ class ExtraTests(TestCase):
         payload = manifest['pods'][0]['care_reminders'][0]
         self.assertEqual(payload['title'], 'Check roots')
         self.assertEqual(payload['due_date'], due_date.isoformat())
+        self.assertTrue(payload['email_notification_enabled'])
+        self.assertEqual(
+            payload['last_notified_on'],
+            views_module.timezone.localdate().isoformat(),
+        )
 
         upload = SimpleUploadedFile(
             'reminder-archive.zip',
@@ -1202,6 +1209,8 @@ class ExtraTests(TestCase):
             restored.completed_at.replace(microsecond=0),
             reminder.completed_at.replace(microsecond=0),
         )
+        self.assertTrue(restored.email_notification_enabled)
+        self.assertEqual(restored.last_notified_on, reminder.last_notified_on)
 
     def test_owner_can_opt_in_care_reminder_email_notification(self):
         user = user_model.objects.create_user(
