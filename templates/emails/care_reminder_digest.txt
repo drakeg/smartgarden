@@ -1,0 +1,8 @@
+Hi {{ user.username }},
+
+You have Smart Garden care reminders due or overdue:
+
+{% for reminder in reminders %}- {{ reminder.title }} — {{ reminder.pod.garden.name }}, Pod {{ reminder.pod.position }} — due {{ reminder.due_date }}{% if reminder.is_overdue %} (overdue){% endif %}
+{% if site_base_url %}  {{ site_base_url }}/gardens/{{ reminder.pod.garden.id }}/{% endif %}
+{% endfor %}
+Open Smart Garden to complete or reschedule your reminders.
