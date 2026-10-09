@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <body>
+    <p>Hi {{ user.username }},</p>
+    <p>You have Smart Garden care reminders due or overdue:</p>
+    <ul>
+      {% for reminder in reminders %}
+        <li>
+          <strong>{{ reminder.title }}</strong> — {{ reminder.pod.garden.name }}, Pod {{ reminder.pod.position }} —
+          due {{ reminder.due_date }}{% if reminder.is_overdue %} <strong>(overdue)</strong>{% endif %}
+          {% if site_base_url %}
+            — <a href="{{ site_base_url }}/gardens/{{ reminder.pod.garden.id }}/">Open garden</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <p>Open Smart Garden to complete or reschedule your reminders.</p>
+  </body>
+</html>

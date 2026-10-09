@@ -737,4 +737,31 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/pod-care-reminders`
 
+**Status:** Complete — merged in PR #51.
+
+
+### Sprint 32 — Optional Care Reminder Email Notifications
+
+**Outcome:** Turn pod care reminders into proactive notifications using the existing SMTP/Celery stack while keeping email delivery explicitly opt-in.
+
+**Acceptance criteria:**
+- Each care reminder has an `Email me when due` opt-in that defaults off.
+- Guest-garden reminder forms do not offer email notification opt-in.
+- A daily Celery task finds opted-in, open reminders that are due or overdue.
+- Eligible reminders are grouped into one digest per account per run.
+- Completed reminders, future reminders, guest gardens, disabled reminders, and accounts without email addresses are skipped.
+- Successful delivery records `last_notified_on` so retries do not resend the same reminder again that day.
+- Global reminder emails remain disabled by default via `CARE_REMINDER_EMAILS_ENABLED=False`.
+- The daily send hour is configurable with `CARE_REMINDER_EMAIL_HOUR`.
+- Django/Celery timezone is configurable through `TIME_ZONE`.
+- `SITE_BASE_URL` provides garden links in reminder emails.
+- The existing `async-email` Compose profile includes Celery Beat alongside the worker and Redis.
+- Both plain-text and HTML digest templates are provided.
+- Full ZIP garden backups preserve reminder notification opt-in and delivery state.
+- API/admin surfaces expose notification state without adding a writable nested API.
+- Regression tests cover opt-in creation, eligibility filtering, daily duplicate suppression, global disablement, ZIP preservation, and Beat/Compose configuration.
+- README, environment examples, migration, and sprint documentation are updated.
+
+**Branch:** `feature/care-reminder-email-notifications`
+
 **Status:** In review.

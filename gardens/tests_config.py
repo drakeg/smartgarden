@@ -297,3 +297,33 @@ class DeveloperUsageAdminConfigurationTests(SimpleTestCase):
         self.assertIn('def has_change_permission', admin_source)
         self.assertIn('def has_delete_permission', admin_source)
         self.assertIn('return False', admin_source)
+
+
+class CareReminderEmailConfigurationTests(SimpleTestCase):
+    def test_care_reminder_email_schedule_is_opt_in_and_timezone_aware(self):
+        source = (Path(settings.BASE_DIR) / 'smartgarden/settings.py').read_text()
+
+        self.assertIn("'CARE_REMINDER_EMAILS_ENABLED', 'False'", source)
+        self.assertIn("'CARE_REMINDER_EMAIL_HOUR', '8'", source)
+        self.assertIn("TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')", source)
+        self.assertIn("CELERY_TIMEZONE = TIME_ZONE", source)
+        self.assertIn("send-due-care-reminder-digests", source)
+        self.assertIn("crontab(hour=CARE_REMINDER_EMAIL_HOUR, minute=0)", source)
+
+    def test_async_email_profile_includes_worker_and_beat(self):
+        for filename in ('docker-compose.yml', 'docker-compose.prod.yml'):
+            compose = (Path(settings.BASE_DIR) / filename).read_text()
+
+            self.assertIn('celery-worker:', compose)
+            self.assertIn('celery-beat:', compose)
+            self.assertIn('celery -A smartgarden beat --loglevel=info', compose)
+            self.assertIn('profiles: ["async-email"]', compose)
+
+    def test_environment_examples_document_reminder_email_controls(self):
+        for filename in ('.env.example', '.env.prod.example'):
+            env = (Path(settings.BASE_DIR) / filename).read_text()
+
+            self.assertIn('CARE_REMINDER_EMAILS_ENABLED=False', env)
+            self.assertIn('CARE_REMINDER_EMAIL_HOUR=8', env)
+            self.assertIn('TIME_ZONE=UTC', env)
+            self.assertIn('SITE_BASE_URL=', env)

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+from celery.schedules import crontab
 import logging
 from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
@@ -156,6 +157,19 @@ CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', '')
 CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() in ('1', 'true', 'yes')
 CELERY_TASK_EAGER_PROPAGATES = True
 
+CARE_REMINDER_EMAILS_ENABLED = os.environ.get(
+    'CARE_REMINDER_EMAILS_ENABLED', 'False'
+).lower() in ('1', 'true', 'yes')
+CARE_REMINDER_EMAIL_HOUR = int(os.environ.get('CARE_REMINDER_EMAIL_HOUR', '8'))
+SITE_BASE_URL = os.environ.get('SITE_BASE_URL', '').rstrip('/')
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    'send-due-care-reminder-digests': {
+        'task': 'gardens.send_due_care_reminder_digests',
+        'schedule': crontab(hour=CARE_REMINDER_EMAIL_HOUR, minute=0),
+    },
+} if CARE_REMINDER_EMAILS_ENABLED else {}
+
 # Optional developer API paywall. When enabled, API viewsets require an
 # active DeveloperAccess entitlement unless the caller is staff/superuser.
 API_PAYWALL_ENABLED = os.environ.get('API_PAYWALL_ENABLED', 'False').lower() in ('1', 'true', 'yes')
@@ -213,7 +227,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
 
 USE_I18N = True
 

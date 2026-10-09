@@ -170,6 +170,8 @@ def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNo
                 "title": reminder.title,
                 "due_date": reminder.due_date.isoformat(),
                 "completed_at": reminder.completed_at.isoformat() if reminder.completed_at else None,
+                "email_notification_enabled": reminder.email_notification_enabled,
+                "last_notified_on": reminder.last_notified_on.isoformat() if reminder.last_notified_on else None,
                 "created_at": reminder.created_at.isoformat(),
             }
             for reminder in pod.care_reminders.all().order_by("due_date", "id")
@@ -422,11 +424,21 @@ def _apply_single_pod(garden_obj: Garden, item: dict, archive_photos: dict[str, 
                 except (TypeError, ValueError):
                     created_at_value = timezone.now()
 
+            last_notified_on_value = None
+            last_notified_on_raw = reminder.get("last_notified_on")
+            if last_notified_on_raw:
+                try:
+                    last_notified_on_value = timezone.datetime.fromisoformat(last_notified_on_raw).date()
+                except (TypeError, ValueError):
+                    last_notified_on_value = None
+
             reminder_obj = PodCareReminder.objects.create(
                 pod=pod,
                 title=title,
                 due_date=due_date_value,
                 completed_at=completed_at_value,
+                email_notification_enabled=bool(reminder.get("email_notification_enabled", False)),
+                last_notified_on=last_notified_on_value,
             )
             PodCareReminder.objects.filter(pk=reminder_obj.pk).update(
                 created_at=created_at_value,
