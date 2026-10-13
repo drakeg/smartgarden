@@ -20,8 +20,8 @@ class PodAdmin(admin.ModelAdmin):
 
 @admin.register(PodCareReminder)
 class PodCareReminderAdmin(admin.ModelAdmin):
-    list_display = ("title", "pod", "due_date", "completed_at", "created_at")
-    list_filter = ("due_date", "completed_at")
+    list_display = ("title", "pod", "due_date", "email_notification_enabled", "last_notified_on", "completed_at", "created_at")
+    list_filter = ("email_notification_enabled", "due_date", "last_notified_on", "completed_at")
     search_fields = ("title", "pod__plant_name", "pod__garden__name")
 
 

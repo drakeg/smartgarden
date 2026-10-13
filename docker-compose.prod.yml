@@ -73,6 +73,21 @@ services:
         condition: service_healthy
     restart: always
 
+  celery-beat:
+    build: .
+    profiles: ["async-email"]
+    command: celery -A smartgarden beat --loglevel=info
+    env_file: .env.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=smartgarden.settings
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
   nginx:
     image: nginx:stable
     ports:

@@ -62,9 +62,13 @@ class PodForm(forms.ModelForm):
 class PodCareReminderForm(forms.ModelForm):
     class Meta:
         model = PodCareReminder
-        fields = ["title", "due_date"]
+        fields = ["title", "due_date", "email_notification_enabled"]
         widgets = {
             "due_date": forms.DateInput(attrs={"type": "date"}),
+            "email_notification_enabled": forms.CheckboxInput(),
+        }
+        labels = {
+            "email_notification_enabled": "Email me when due",
         }
 
     def __init__(self, *args, **kwargs):

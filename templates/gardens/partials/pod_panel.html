@@ -96,6 +96,20 @@
     name="due_date"
     required
   >
+  {% if not is_guest %}
+    <div class="form-check mb-2">
+      <input
+        id="reminder_email_{{ pod.position }}"
+        class="form-check-input"
+        type="checkbox"
+        name="email_notification_enabled"
+        value="on"
+      >
+      <label class="form-check-label small" for="reminder_email_{{ pod.position }}">
+        Email me when due
+      </label>
+    </div>
+  {% endif %}
   <button class="btn btn-outline-primary w-100" type="submit">Add Reminder</button>
 </form>
 

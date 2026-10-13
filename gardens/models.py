@@ -119,6 +119,8 @@ class PodCareReminder(models.Model):
     title = models.CharField(max_length=160)
     due_date = models.DateField(db_index=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    email_notification_enabled = models.BooleanField(default=False)
+    last_notified_on = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -30,6 +30,8 @@ class PodCareReminderSerializer(serializers.ModelSerializer):
             "title",
             "due_date",
             "completed_at",
+            "email_notification_enabled",
+            "last_notified_on",
             "created_at",
             "is_completed",
             "is_overdue",

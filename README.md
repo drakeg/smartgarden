@@ -18,6 +18,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - Garden-level pod status overview with counts for each growth state
 - Filterable garden activity timeline combining current plantings, pod notes/photo notes, completed planting cycles, and completed care reminders
 - Pod care reminders with due dates, overdue highlighting, completion/reopen controls, garden-level due counts, and ZIP backup preservation
+- Optional opt-in daily email digests for due/overdue care reminders using the existing Celery/SMTP stack
 - Read-only public garden snapshots with pod status/age while keeping notes and photos private
 - My Gardens dashboard summaries for active, harvesting, total pods, sharing state, and latest activity
 - Server-side My Gardens search and Public/Private filtering
@@ -260,7 +261,7 @@ Do not enable both `EMAIL_USE_TLS` and `EMAIL_USE_SSL` at the same time. Provide
 
 ### Optional Celery email delivery
 
-Registration and welcome emails are sent synchronously by default. The Docker Compose files include an optional `async-email` profile with Redis and a Celery worker.
+Registration and welcome emails are sent synchronously by default. The Docker Compose files include an optional `async-email` profile with Redis, a Celery worker, and Celery Beat.
 
 For development, add this to `.env`:
 
@@ -283,7 +284,21 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml --profile async-e
 
 The project installs Celery with Redis transport support. Production Redis uses append-only persistence in the `redisdata` volume. The Compose runtime uses Redis 8 Alpine for both development and production async-email profiles.
 
-When `CELERY_BROKER_URL` is unset or empty, the Redis and worker services are not required and Smart Garden sends registration/welcome emails synchronously from the web process.
+When `CELERY_BROKER_URL` is unset or empty, the Redis/worker/Beat services are not required and Smart Garden sends registration/welcome emails synchronously from the web process.
+
+Care-reminder digests are separately opt-in. They remain disabled unless `CARE_REMINDER_EMAILS_ENABLED=True`, and each reminder must also be created with **Email me when due** checked. Beat sends one digest per account per day for opted-in reminders that are due or overdue. Configure `CARE_REMINDER_EMAIL_HOUR` in the app's `TIME_ZONE` and set `SITE_BASE_URL` so emails can link back to the garden.
+
+Example:
+
+```ini
+CELERY_BROKER_URL=redis://redis:6379/0
+CARE_REMINDER_EMAILS_ENABLED=True
+CARE_REMINDER_EMAIL_HOUR=8
+TIME_ZONE=America/New_York
+SITE_BASE_URL=https://garden.example.com
+```
+
+Completed reminders, future reminders, guest gardens, reminders without opt-in, and accounts without an email address are skipped. A successful digest records `last_notified_on` so scheduler retries do not resend the same reminder again that day.
 
 For test/dev environments you can also force Celery tasks to execute eagerly:
 
