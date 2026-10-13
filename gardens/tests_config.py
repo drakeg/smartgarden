@@ -305,8 +305,8 @@ class CareReminderEmailConfigurationTests(SimpleTestCase):
 
         self.assertIn("'CARE_REMINDER_EMAILS_ENABLED', 'False'", source)
         self.assertIn("'CARE_REMINDER_EMAIL_HOUR', '8'", source)
-        self.assertIn("TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')", source)
-        self.assertIn("CELERY_TIMEZONE = TIME_ZONE", source)
+        self.assertIn("CELERY_TIMEZONE = os.environ.get('TIME_ZONE', 'UTC')", source)
+        self.assertIn("TIME_ZONE = CELERY_TIMEZONE", source)
         self.assertIn("send-due-care-reminder-digests", source)
         self.assertIn("crontab(hour=CARE_REMINDER_EMAIL_HOUR, minute=0)", source)
 
