@@ -162,7 +162,7 @@ CARE_REMINDER_EMAILS_ENABLED = os.environ.get(
 ).lower() in ('1', 'true', 'yes')
 CARE_REMINDER_EMAIL_HOUR = int(os.environ.get('CARE_REMINDER_EMAIL_HOUR', '8'))
 SITE_BASE_URL = os.environ.get('SITE_BASE_URL', '').rstrip('/')
-CELERY_TIMEZONE = TIME_ZONE
+CELERY_TIMEZONE = os.environ.get('TIME_ZONE', 'UTC')
 CELERY_BEAT_SCHEDULE = {
     'send-due-care-reminder-digests': {
         'task': 'gardens.send_due_care_reminder_digests',
@@ -227,7 +227,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
+TIME_ZONE = CELERY_TIMEZONE
 
 USE_I18N = True
 
