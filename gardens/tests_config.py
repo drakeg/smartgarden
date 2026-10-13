@@ -262,8 +262,8 @@ class ContainerImageHardeningTests(SimpleTestCase):
     def test_runtime_image_uses_non_root_user_and_multistage_build(self):
         dockerfile = (Path(settings.BASE_DIR) / 'Dockerfile').read_text()
 
-        self.assertIn('FROM python:3.14-slim AS builder', dockerfile)
-        self.assertIn('FROM python:3.14-slim AS runtime', dockerfile)
+        self.assertIn('FROM python:3.15-slim AS builder', dockerfile)
+        self.assertIn('FROM python:3.15-slim AS runtime', dockerfile)
         self.assertIn('COPY --from=builder /install /usr/local', dockerfile)
         self.assertIn('USER smartgarden', dockerfile)
         self.assertIn('useradd --system', dockerfile)
@@ -271,7 +271,7 @@ class ContainerImageHardeningTests(SimpleTestCase):
 
     def test_runtime_stage_excludes_compiler_toolchain(self):
         dockerfile = (Path(settings.BASE_DIR) / 'Dockerfile').read_text()
-        runtime = dockerfile.split('FROM python:3.14-slim AS runtime', 1)[1]
+        runtime = dockerfile.split('FROM python:3.15-slim AS runtime', 1)[1]
 
         self.assertNotIn('build-essential', runtime)
         self.assertNotIn(' gcc ', runtime)
