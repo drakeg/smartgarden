@@ -1,6 +1,6 @@
 # Build Python dependencies separately so compiler/header packages do not
 # ship in the production runtime image.
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -16,7 +16,7 @@ RUN python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
-FROM python:3.14-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
