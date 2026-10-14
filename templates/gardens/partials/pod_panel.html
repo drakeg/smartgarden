@@ -116,7 +116,10 @@
 {% if pod.care_reminders.all %}
   <div class="vstack gap-2 mb-3">
     {% for reminder in pod.care_reminders.all %}
-      <div class="border rounded-3 p-2 {% if reminder.completed_at %}bg-light{% elif reminder.due_date < today %}border-danger bg-danger-subtle{% else %}bg-white{% endif %}">
+      {% if edit_error_reminder_id == reminder.id %}
+        {% include "gardens/partials/pod_care_reminder_edit_form.html" with reminder=reminder form=edit_reminder_form %}
+      {% else %}
+      <div id="care-reminder-{{ reminder.id }}" class="border rounded-3 p-2 {% if reminder.completed_at %}bg-light{% elif reminder.due_date < today %}border-danger bg-danger-subtle{% else %}bg-white{% endif %}">
         <div class="d-flex justify-content-between gap-2">
           <div>
             <div class="{% if reminder.completed_at %}text-decoration-line-through muted{% else %}fw-semibold{% endif %}">
@@ -125,9 +128,17 @@
             <div class="small {% if not reminder.completed_at and reminder.due_date < today %}text-danger fw-semibold{% else %}muted{% endif %}">
               Due {{ reminder.due_date }}
               {% if reminder.completed_at %} · completed {{ reminder.completed_at }}{% elif reminder.due_date < today %} · overdue{% endif %}
+              {% if reminder.email_notification_enabled %} · email enabled{% endif %}
             </div>
           </div>
           <div class="d-flex gap-1">
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              hx-get="{% url 'gardens:pod_care_reminder_edit' garden.id pod.position reminder.id %}"
+              hx-target="#care-reminder-{{ reminder.id }}"
+              hx-swap="outerHTML"
+            >Edit</button>
             <form
               hx-post="{% url 'gardens:pod_care_reminder_toggle' garden.id pod.position reminder.id %}"
               hx-target="#sidepanel"
@@ -150,6 +161,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
     {% endfor %}
   </div>
 {% else %}
