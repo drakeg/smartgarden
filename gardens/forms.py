@@ -74,6 +74,7 @@ class PodCareReminderForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _apply_bootstrap_classes(self)
+        self.fields["email_notification_enabled"].widget.attrs["class"] = "form-check-input"
 
 
 class PodNoteForm(forms.ModelForm):
