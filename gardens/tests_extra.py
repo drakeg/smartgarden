@@ -1070,6 +1070,204 @@ class ExtraTests(TestCase):
         self.assertFalse(PodCareReminder.objects.filter(id=reminder.id).exists())
         self.assertContains(delete_resp, 'Care reminder deleted.')
 
+    def test_owner_can_edit_and_reschedule_care_reminder(self):
+        user = user_model.objects.create_user(
+            username='remindereditowner',
+            password='pass',
+            email='edit@example.com',
+        )
+        garden = user.gardens.create(name='Editable Reminder Garden')
+        pod = garden.pods.create(position=1)
+        today = views_module.timezone.localdate()
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Old task',
+            due_date=today,
+            email_notification_enabled=True,
+            last_notified_on=today,
+        )
+        self.client.force_login(user)
+
+        get_resp = self.client.get(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertContains(get_resp, 'Old task')
+        self.assertContains(get_resp, 'Email me when due')
+
+        new_due = today + views_module.timedelta(days=3)
+        post_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            ),
+            {
+                'title': 'New task',
+                'due_date': new_due.isoformat(),
+            },
+        )
+
+        self.assertEqual(post_resp.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertEqual(reminder.title, 'New task')
+        self.assertEqual(reminder.due_date, new_due)
+        self.assertFalse(reminder.email_notification_enabled)
+        self.assertIsNone(reminder.last_notified_on)
+        self.assertContains(post_resp, 'Care reminder updated.')
+
+    def test_title_only_reminder_edit_preserves_last_notified_on(self):
+        user = user_model.objects.create_user(
+            username='remindertitleedit',
+            password='pass',
+            email='title@example.com',
+        )
+        garden = user.gardens.create(name='Title Edit Garden')
+        pod = garden.pods.create(position=1)
+        today = views_module.timezone.localdate()
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Before',
+            due_date=today,
+            email_notification_enabled=True,
+            last_notified_on=today,
+        )
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            ),
+            {
+                'title': 'After',
+                'due_date': today.isoformat(),
+                'email_notification_enabled': 'on',
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertEqual(reminder.title, 'After')
+        self.assertEqual(reminder.last_notified_on, today)
+
+    def test_invalid_reminder_edit_keeps_inline_form_and_original_record(self):
+        user = user_model.objects.create_user(username='reminderinvalidedit', password='pass')
+        garden = user.gardens.create(name='Invalid Edit Garden')
+        pod = garden.pods.create(position=1)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Keep me',
+            due_date=views_module.timezone.localdate(),
+        )
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            ),
+            {'title': 'Changed but invalid', 'due_date': ''},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertEqual(reminder.title, 'Keep me')
+        self.assertContains(resp, 'Changed but invalid')
+        self.assertEqual(resp.context['edit_error_reminder_id'], reminder.id)
+
+    def test_other_user_cannot_edit_care_reminder(self):
+        owner = user_model.objects.create_user(username='remindereditowner2', password='pass')
+        other = user_model.objects.create_user(username='remindereditother2', password='pass')
+        garden = owner.gardens.create(name='Private Editable Reminder')
+        pod = garden.pods.create(position=1)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Private reminder',
+            due_date=views_module.timezone.localdate(),
+        )
+        self.client.force_login(other)
+
+        get_resp = self.client.get(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+        post_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            ),
+            {
+                'title': 'Injected',
+                'due_date': views_module.timezone.localdate().isoformat(),
+            },
+        )
+
+        self.assertEqual(get_resp.status_code, 404)
+        self.assertEqual(post_resp.status_code, 404)
+        reminder.refresh_from_db()
+        self.assertEqual(reminder.title, 'Private reminder')
+
+    def test_guest_reminder_edit_forces_email_notifications_off(self):
+        resp = self.client.get(reverse('gardens:guest_start'), follow=True)
+        garden = Garden.objects.filter(is_guest=True).order_by('-created_at').first()
+        pod = garden.pods.first()
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Guest reminder',
+            due_date=views_module.timezone.localdate(),
+            email_notification_enabled=True,
+            last_notified_on=views_module.timezone.localdate(),
+        )
+
+        edit_resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_edit',
+                args=[garden.id, pod.position, reminder.id],
+            ),
+            {
+                'title': 'Guest reminder updated',
+                'due_date': views_module.timezone.localdate().isoformat(),
+                'email_notification_enabled': 'on',
+            },
+        )
+
+        self.assertEqual(edit_resp.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertEqual(reminder.title, 'Guest reminder updated')
+        self.assertFalse(reminder.email_notification_enabled)
+        self.assertIsNone(reminder.last_notified_on)
+
+    def test_reopening_reminder_clears_last_notified_on(self):
+        user = user_model.objects.create_user(username='reminderreopennotify', password='pass')
+        garden = user.gardens.create(name='Reopen Notification Garden')
+        pod = garden.pods.create(position=1)
+        reminder = PodCareReminder.objects.create(
+            pod=pod,
+            title='Reopen me',
+            due_date=views_module.timezone.localdate(),
+            completed_at=views_module.timezone.now(),
+            email_notification_enabled=True,
+            last_notified_on=views_module.timezone.localdate(),
+        )
+        self.client.force_login(user)
+
+        resp = self.client.post(
+            reverse(
+                'gardens:pod_care_reminder_toggle',
+                args=[garden.id, pod.position, reminder.id],
+            )
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        reminder.refresh_from_db()
+        self.assertIsNone(reminder.completed_at)
+        self.assertIsNone(reminder.last_notified_on)
+
     def test_garden_list_and_detail_show_open_and_overdue_reminders(self):
         user = user_model.objects.create_user(username='reminderdashboard', password='pass')
         garden = user.gardens.create(name='Reminder Dashboard')
