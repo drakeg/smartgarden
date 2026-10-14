@@ -1185,13 +1185,72 @@ def pod_care_reminder_add(request, garden_id: int, position: int):
     })
 
 
+@require_http_methods(["GET", "POST"])
+def pod_care_reminder_edit(request, garden_id: int, position: int, reminder_id: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    reminder = get_object_or_404(PodCareReminder, id=reminder_id, pod=pod)
+
+    if request.method == "GET":
+        form = PodCareReminderForm(instance=reminder)
+        return render(request, "gardens/partials/pod_care_reminder_edit_form.html", {
+            "garden": garden,
+            "pod": pod,
+            "reminder": reminder,
+            "form": form,
+            "is_guest": garden.is_guest,
+        })
+
+    old_due_date = reminder.due_date
+    old_email_enabled = reminder.email_notification_enabled
+    form = PodCareReminderForm(request.POST, instance=reminder)
+
+    if form.is_valid():
+        reminder = form.save(commit=False)
+        if garden.is_guest:
+            reminder.email_notification_enabled = False
+
+        if (
+            reminder.due_date != old_due_date
+            or reminder.email_notification_enabled != old_email_enabled
+        ):
+            reminder.last_notified_on = None
+
+        reminder.save()
+        notice = "Care reminder updated."
+        edit_error_reminder_id = None
+        edit_reminder_form = None
+    else:
+        notice = None
+        edit_error_reminder_id = reminder.id
+        edit_reminder_form = form
+
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": PodForm(instance=pod),
+        "note_form": PodNoteForm(),
+        "today": timezone.localdate(),
+        "notice": notice,
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+        "edit_error_reminder_id": edit_error_reminder_id,
+        "edit_reminder_form": edit_reminder_form,
+    })
+
+
 @require_http_methods(["POST"])
 def pod_care_reminder_toggle(request, garden_id: int, position: int, reminder_id: int):
     garden = _get_editable_garden_or_404(request, garden_id)
     pod = get_object_or_404(Pod, garden=garden, position=position)
     reminder = get_object_or_404(PodCareReminder, id=reminder_id, pod=pod)
-    reminder.completed_at = None if reminder.completed_at else timezone.now()
-    reminder.save(update_fields=["completed_at"])
+    if reminder.completed_at:
+        reminder.completed_at = None
+        reminder.last_notified_on = None
+        reminder.save(update_fields=["completed_at", "last_notified_on"])
+    else:
+        reminder.completed_at = timezone.now()
+        reminder.save(update_fields=["completed_at"])
 
     return render(request, PARTIAL_POD_PANEL, {
         "garden": garden,
