@@ -23,6 +23,7 @@ urlpatterns = [
     path("gardens/<int:garden_id>/pods/<int:position>/save/", views.pod_save, name="pod_save"),
     path("gardens/<int:garden_id>/pods/<int:position>/notes/add/", views.pod_note_add, name="pod_note_add"),
     path("gardens/<int:garden_id>/pods/<int:position>/reminders/add/", views.pod_care_reminder_add, name="pod_care_reminder_add"),
+    path("gardens/<int:garden_id>/pods/<int:position>/reminders/<int:reminder_id>/edit/", views.pod_care_reminder_edit, name="pod_care_reminder_edit"),
     path("gardens/<int:garden_id>/pods/<int:position>/reminders/<int:reminder_id>/toggle/", views.pod_care_reminder_toggle, name="pod_care_reminder_toggle"),
     path("gardens/<int:garden_id>/pods/<int:position>/reminders/<int:reminder_id>/delete/", views.pod_care_reminder_delete, name="pod_care_reminder_delete"),
     path("gardens/<int:garden_id>/pods/<int:position>/notes/<int:note_id>/edit/", views.pod_note_edit, name="pod_note_edit"),
