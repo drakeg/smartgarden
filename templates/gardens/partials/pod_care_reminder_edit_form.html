@@ -1,0 +1,48 @@
+<form
+  id="care-reminder-edit-{{ reminder.id }}"
+  hx-post="{% url 'gardens:pod_care_reminder_edit' garden.id pod.position reminder.id %}"
+  hx-target="#sidepanel"
+  hx-swap="innerHTML"
+  class="border rounded-3 p-2 bg-white"
+>
+  {% csrf_token %}
+  <div class="mb-2">
+    <label class="form-label small" for="{{ form.title.id_for_label }}">Reminder</label>
+    {{ form.title }}
+    {% for error in form.title.errors %}
+      <div class="text-danger small">{{ error }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="mb-2">
+    <label class="form-label small" for="{{ form.due_date.id_for_label }}">Due date</label>
+    {{ form.due_date }}
+    {% for error in form.due_date.errors %}
+      <div class="text-danger small">{{ error }}</div>
+    {% endfor %}
+  </div>
+
+  {% if not is_guest %}
+    <div class="form-check mb-2">
+      {{ form.email_notification_enabled }}
+      <label class="form-check-label small" for="{{ form.email_notification_enabled.id_for_label }}">
+        Email me when due
+      </label>
+    </div>
+  {% endif %}
+
+  {% if form.non_field_errors %}
+    <div class="text-danger small mb-2">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-primary" type="submit">Save</button>
+    <button
+      class="btn btn-sm btn-outline-secondary"
+      type="button"
+      hx-get="{% url 'gardens:pod_panel' garden.id pod.position %}"
+      hx-target="#sidepanel"
+      hx-swap="innerHTML"
+    >Cancel</button>
+  </div>
+</form>

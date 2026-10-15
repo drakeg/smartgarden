@@ -764,4 +764,30 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/care-reminder-email-notifications`
 
+**Status:** Complete — merged in PR #52.
+
+
+### Sprint 33 — Care Reminder Editing and Rescheduling
+
+**Outcome:** Let growers correct, reschedule, and change notification preferences on existing care reminders without deleting and recreating them.
+
+**Acceptance criteria:**
+- Existing care reminders have an inline Edit action in the pod side panel.
+- Edit GET returns a focused HTMX form for title, due date, and email-notification preference.
+- Valid edits update the existing reminder in place.
+- Invalid edits preserve the original database record and re-render entered values/errors inline.
+- Rescheduling a reminder clears `last_notified_on` so the new due date can notify again.
+- Changing email-notification opt-in clears `last_notified_on`.
+- Title-only edits preserve `last_notified_on`.
+- Reopening a completed reminder clears `last_notified_on`.
+- Guest reminders cannot retain or enable email notifications.
+- Existing garden ownership/browser-scoped guest access controls apply to reminder edits.
+- Other users receive 404 and cannot inspect or modify reminders.
+- Reminder rows indicate when email notification is enabled.
+- Existing complete/reopen/delete behavior remains unchanged.
+- Regression tests cover owner editing, rescheduling, validation errors, ownership, guest behavior, title-only edits, and reopen notification reset.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/care-reminder-editing`
+
 **Status:** In review.
