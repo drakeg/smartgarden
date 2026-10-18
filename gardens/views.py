@@ -746,6 +746,82 @@ def guest_start(request):
 # Gardens (Account-only list/create)
 # ---------------------------
 @require_http_methods(["GET", "POST"])
+@login_required(login_url="gardens:login")
+@require_http_methods(["GET"])
+def care_dashboard(request):
+    """Aggregate pod care reminders across the signed-in user's account gardens."""
+    today = timezone.localdate()
+    status_filter = (request.GET.get("status") or "open").strip().lower()
+    garden_filter = (request.GET.get("garden") or "").strip()
+
+    allowed_statuses = {"open", "overdue", "today", "upcoming", "completed", "all"}
+    if status_filter not in allowed_statuses:
+        status_filter = "open"
+
+    reminders = PodCareReminder.objects.filter(
+        pod__garden__owner=request.user,
+        pod__garden__is_guest=False,
+    ).select_related("pod", "pod__garden")
+
+    selected_garden_id = None
+    if garden_filter:
+        try:
+            selected_garden_id = int(garden_filter)
+        except (TypeError, ValueError):
+            selected_garden_id = None
+        if selected_garden_id is not None:
+            reminders = reminders.filter(pod__garden_id=selected_garden_id)
+        else:
+            garden_filter = ""
+
+    if status_filter == "open":
+        reminders = reminders.filter(completed_at__isnull=True)
+    elif status_filter == "overdue":
+        reminders = reminders.filter(completed_at__isnull=True, due_date__lt=today)
+    elif status_filter == "today":
+        reminders = reminders.filter(completed_at__isnull=True, due_date=today)
+    elif status_filter == "upcoming":
+        reminders = reminders.filter(completed_at__isnull=True, due_date__gt=today)
+    elif status_filter == "completed":
+        reminders = reminders.filter(completed_at__isnull=False)
+
+    if status_filter == "completed":
+        reminders = reminders.order_by("-completed_at", "-due_date", "pod__garden__name", "pod__position")
+    else:
+        reminders = reminders.order_by("due_date", "pod__garden__name", "pod__position", "id")
+
+    account_gardens = Garden.objects.filter(
+        owner=request.user,
+        is_guest=False,
+    ).order_by("name", "id")
+
+    all_open = PodCareReminder.objects.filter(
+        pod__garden__owner=request.user,
+        pod__garden__is_guest=False,
+        completed_at__isnull=True,
+    )
+    counts = {
+        "open": all_open.count(),
+        "overdue": all_open.filter(due_date__lt=today).count(),
+        "today": all_open.filter(due_date=today).count(),
+        "upcoming": all_open.filter(due_date__gt=today).count(),
+        "completed": PodCareReminder.objects.filter(
+            pod__garden__owner=request.user,
+            pod__garden__is_guest=False,
+            completed_at__isnull=False,
+        ).count(),
+    }
+
+    return render(request, "gardens/care_dashboard.html", {
+        "reminders": list(reminders[:200]),
+        "status_filter": status_filter,
+        "garden_filter": garden_filter,
+        "account_gardens": account_gardens,
+        "today": today,
+        "counts": counts,
+    })
+
+
 def garden_list(request):
     if not request.user.is_authenticated:
         return redirect(GARDENS_HOME)
