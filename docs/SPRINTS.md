@@ -790,4 +790,31 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/care-reminder-editing`
 
+**Status:** Complete — merged in PR #54.
+
+
+### Sprint 34 — Cross-Garden Care Dashboard
+
+**Outcome:** Give growers one account-level view of care reminders across all owned gardens so urgent tasks do not require opening each garden individually.
+
+**Acceptance criteria:**
+- `/care/` requires authentication.
+- The dashboard includes only reminders from the signed-in user's non-guest account gardens.
+- Other users' reminders and guest-garden reminders are excluded.
+- Default view shows open reminders sorted by due date and garden/pod.
+- Summary counts show open, overdue, due-today, upcoming, and completed reminders.
+- Status filters support open, overdue, due today, upcoming, completed, and all reminders.
+- Garden filter limits results to one owned garden.
+- Invalid status and garden filter values fall back safely.
+- Completed reminders sort newest completion first.
+- Reminder rows show garden, pod, due date, completion state, overdue/due-today state, and email-notification state.
+- Each reminder links back to its owning garden for action.
+- Authenticated navigation exposes the Care Dashboard.
+- Results are capped to the first 200 matching reminders.
+- No new database table or duplicate reminder mutation flow is introduced.
+- Regression tests cover authentication, ownership isolation, guest exclusion, counts, ordering, filters, and invalid-filter fallback.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/care-dashboard`
+
 **Status:** In review.
