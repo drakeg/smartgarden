@@ -13,6 +13,7 @@ urlpatterns = [
     path("account/developer/", views.developer_dashboard, name="developer_dashboard"),
 
     path("gardens/", views.garden_list, name="garden_list"),
+    path("care/", views.care_dashboard, name="care_dashboard"),
     path("gardens/new/", views.garden_create, name="garden_create"),
     path("gardens/<int:garden_id>/", views.garden_detail, name="garden_detail"),
     path("gardens/<int:garden_id>/edit/", views.garden_edit, name="garden_edit"),
