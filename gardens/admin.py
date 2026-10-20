@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, Pod, PodCareReminder, PodNote, PodPlantingCycle, GlobalNote
+from .models import DeveloperAccess, DeveloperApiUsageDaily, Garden, HarvestUnit, Pod, PodCareReminder, PodHarvest, PodNote, PodPlantingCycle, GlobalNote
 
 class PodInline(admin.TabularInline):
     model = Pod
@@ -17,6 +17,20 @@ class PodAdmin(admin.ModelAdmin):
     list_display = ("garden", "position", "plant_name", "status", "planted_at", "updated_at")
     list_filter = ("status", "garden__device_type")
     search_fields = ("plant_name", "garden__name")
+
+@admin.register(PodHarvest)
+class PodHarvestAdmin(admin.ModelAdmin):
+    list_display = ("pod", "plant_name", "harvested_at", "amount", "unit", "created_at")
+    list_filter = ("unit", "harvested_at")
+    search_fields = ("plant_name", "note", "pod__garden__name")
+    readonly_fields = ("pod", "plant_name", "harvested_at", "amount", "unit", "note", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(PodCareReminder)
 class PodCareReminderAdmin(admin.ModelAdmin):
