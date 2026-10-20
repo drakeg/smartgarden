@@ -1381,7 +1381,7 @@ class ExtraTests(TestCase):
         event = resp.context['activity_events'][0]
         self.assertEqual(event['type'], 'harvest')
         self.assertIn('Basil', event['detail'])
-        self.assertIn('12.5 g', event['detail'])
+        self.assertIn('12.50 g', event['detail'])
         self.assertIn('Trimmed tops', event['detail'])
 
     def test_archive_roundtrip_preserves_harvest_records(self):
@@ -1419,7 +1419,7 @@ class ExtraTests(TestCase):
         imported_harvest = imported.pods.get(position=1).harvests.get()
         self.assertEqual(imported_harvest.plant_name, harvest.plant_name)
         self.assertEqual(imported_harvest.harvested_at, harvest.harvested_at)
-        self.assertEqual(imported_harvest.amount, harvest.amount)
+        self.assertEqual(imported_harvest.amount, views_module.Decimal(str(harvest.amount)))
         self.assertEqual(imported_harvest.unit, harvest.unit)
         self.assertEqual(imported_harvest.note, harvest.note)
 
