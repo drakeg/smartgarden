@@ -746,7 +746,6 @@ def guest_start(request):
 # ---------------------------
 # Gardens (Account-only list/create)
 # ---------------------------
-@require_http_methods(["GET", "POST"])
 def _ical_escape(value: str) -> str:
     return (
         value.replace("\\", "\\\\")
