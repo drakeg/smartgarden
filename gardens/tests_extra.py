@@ -1020,6 +1020,144 @@ class ExtraTests(TestCase):
         self.assertEqual(imported.pods.get(position=1).plant_name, '')
         self.assertEqual(imported.pods.get(position=2).plant_name, 'Basil')
 
+    def test_care_dashboard_requires_authentication(self):
+        resp = self.client.get(reverse('gardens:care_dashboard'))
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse('gardens:login'), resp['Location'])
+
+    def test_care_dashboard_is_owner_scoped_and_excludes_guest_gardens(self):
+        owner = user_model.objects.create_user(username='careowner', password='pass')
+        other = user_model.objects.create_user(username='careother', password='pass')
+        mine = owner.gardens.create(name='Mine')
+        theirs = other.gardens.create(name='Theirs')
+        guest = Garden.objects.create(
+            name='Guest',
+            is_guest=True,
+            guest_token='guest-care-token',
+        )
+        mine_pod = mine.pods.create(position=1)
+        theirs_pod = theirs.pods.create(position=1)
+        guest_pod = guest.pods.create(position=1)
+        PodCareReminder.objects.create(
+            pod=mine_pod,
+            title='Mine reminder',
+            due_date=views_module.timezone.localdate(),
+        )
+        PodCareReminder.objects.create(
+            pod=theirs_pod,
+            title='Their reminder',
+            due_date=views_module.timezone.localdate(),
+        )
+        PodCareReminder.objects.create(
+            pod=guest_pod,
+            title='Guest reminder',
+            due_date=views_module.timezone.localdate(),
+        )
+        self.client.force_login(owner)
+
+        resp = self.client.get(reverse('gardens:care_dashboard'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Mine reminder')
+        self.assertNotContains(resp, 'Their reminder')
+        self.assertNotContains(resp, 'Guest reminder')
+        self.assertEqual(resp.context['counts']['open'], 1)
+
+    def test_care_dashboard_status_filters_and_counts(self):
+        user = user_model.objects.create_user(username='carefilters', password='pass')
+        garden = user.gardens.create(name='Filter Garden')
+        pod = garden.pods.create(position=1)
+        today = views_module.timezone.localdate()
+        overdue = PodCareReminder.objects.create(
+            pod=pod,
+            title='Overdue reminder',
+            due_date=today - views_module.timedelta(days=2),
+        )
+        due_today = PodCareReminder.objects.create(
+            pod=pod,
+            title='Today reminder',
+            due_date=today,
+        )
+        upcoming = PodCareReminder.objects.create(
+            pod=pod,
+            title='Upcoming reminder',
+            due_date=today + views_module.timedelta(days=3),
+        )
+        completed = PodCareReminder.objects.create(
+            pod=pod,
+            title='Completed reminder',
+            due_date=today - views_module.timedelta(days=4),
+            completed_at=views_module.timezone.now(),
+        )
+        self.client.force_login(user)
+
+        default_resp = self.client.get(reverse('gardens:care_dashboard'))
+        self.assertEqual(default_resp.context['status_filter'], 'open')
+        self.assertEqual(
+            [reminder.id for reminder in default_resp.context['reminders']],
+            [overdue.id, due_today.id, upcoming.id],
+        )
+        self.assertEqual(default_resp.context['counts'], {
+            'open': 3,
+            'overdue': 1,
+            'today': 1,
+            'upcoming': 1,
+            'completed': 1,
+        })
+
+        overdue_resp = self.client.get(
+            reverse('gardens:care_dashboard'),
+            {'status': 'overdue'},
+        )
+        self.assertEqual(
+            [reminder.id for reminder in overdue_resp.context['reminders']],
+            [overdue.id],
+        )
+
+        completed_resp = self.client.get(
+            reverse('gardens:care_dashboard'),
+            {'status': 'completed'},
+        )
+        self.assertEqual(
+            [reminder.id for reminder in completed_resp.context['reminders']],
+            [completed.id],
+        )
+
+    def test_care_dashboard_filters_by_owned_garden_and_invalid_values_fall_back(self):
+        user = user_model.objects.create_user(username='caregardenfilter', password='pass')
+        first = user.gardens.create(name='First Garden')
+        second = user.gardens.create(name='Second Garden')
+        first_reminder = PodCareReminder.objects.create(
+            pod=first.pods.create(position=1),
+            title='First task',
+            due_date=views_module.timezone.localdate(),
+        )
+        PodCareReminder.objects.create(
+            pod=second.pods.create(position=1),
+            title='Second task',
+            due_date=views_module.timezone.localdate(),
+        )
+        self.client.force_login(user)
+
+        filtered = self.client.get(
+            reverse('gardens:care_dashboard'),
+            {'garden': str(first.id), 'status': 'open'},
+        )
+        self.assertEqual(
+            [reminder.id for reminder in filtered.context['reminders']],
+            [first_reminder.id],
+        )
+        self.assertEqual(filtered.context['garden_filter'], str(first.id))
+
+        invalid = self.client.get(
+            reverse('gardens:care_dashboard'),
+            {'garden': 'not-an-id', 'status': 'bogus'},
+        )
+        self.assertEqual(invalid.context['garden_filter'], '')
+        self.assertEqual(invalid.context['status_filter'], 'open')
+        self.assertEqual(len(invalid.context['reminders']), 2)
+
     def test_owner_can_add_complete_reopen_and_delete_care_reminder(self):
         user = user_model.objects.create_user(username='reminderowner', password='pass')
         garden = user.gardens.create(name='Reminder Garden')
