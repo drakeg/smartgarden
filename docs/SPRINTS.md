@@ -841,4 +841,30 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/care-calendar-export`
 
+**Status:** Complete — merged in PR #56.
+
+
+### Sprint 36 — Harvest Records
+
+**Outcome:** Add durable harvest history so growers can track what was harvested from each pod, when, and optionally how much.
+
+**Acceptance criteria:**
+- Pod side panel lets the current garden owner/guest record a harvest.
+- Each harvest snapshots the pod's current plant name.
+- Harvest records include harvest date, optional positive quantity, optional unit, and optional note.
+- Supported units are grams, ounces, pounds, and count.
+- Quantity requires a valid unit; invalid/negative quantities are rejected.
+- Harvest records can be deleted from the pod side panel.
+- Existing garden ownership/browser-scoped guest controls apply to harvest add/delete actions.
+- Harvest history remains durable if the pod's current plant name later changes or the pod is reset.
+- Garden Activity Timeline supports harvest events and harvest-only filtering.
+- Pod API responses expose harvest history read-only.
+- Django admin exposes harvest records read-only.
+- Complete ZIP garden backups preserve and restore harvest records.
+- Legacy JSON export/import remains unchanged.
+- Regression tests cover add/delete, validation, ownership, plant-name snapshotting, timeline filtering, API read-only behavior, and ZIP round-trip.
+- A schema migration, README, and sprint documentation are included.
+
+**Branch:** `feature/harvest-records`
+
 **Status:** In review.

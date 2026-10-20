@@ -83,6 +83,45 @@ class Pod(models.Model):
     def __str__(self) -> str:
         return f"{self.garden.name} Pod {self.position}"
 
+class HarvestUnit(models.TextChoices):
+    GRAM = "GRAM", "g"
+    OUNCE = "OUNCE", "oz"
+    POUND = "POUND", "lb"
+    COUNT = "COUNT", "count"
+
+
+class PodHarvest(models.Model):
+    """A durable harvest record for a pod."""
+
+    pod = models.ForeignKey(
+        Pod,
+        on_delete=models.CASCADE,
+        related_name="harvests",
+    )
+    plant_name = models.CharField(max_length=120, blank=True)
+    harvested_at = models.DateField(default=timezone.localdate, db_index=True)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    unit = models.CharField(
+        max_length=12,
+        choices=HarvestUnit.choices,
+        blank=True,
+    )
+    note = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-harvested_at", "-created_at", "-id"]
+
+    def __str__(self) -> str:
+        label = self.plant_name.strip() or "Unnamed plant"
+        return f"{self.pod} — {label} harvested {self.harvested_at}"
+
+
 class PodPlantingCycle(models.Model):
     """Immutable snapshot of a completed planting cycle for a pod."""
 

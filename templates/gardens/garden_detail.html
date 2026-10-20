@@ -274,6 +274,7 @@
             <option value="note" {% if activity_type == "note" %}selected{% endif %}>Notes</option>
             <option value="cycle" {% if activity_type == "cycle" %}selected{% endif %}>Completed cycles</option>
             <option value="reminder" {% if activity_type == "reminder" %}selected{% endif %}>Completed reminders</option>
+            <option value="harvest" {% if activity_type == "harvest" %}selected{% endif %}>Harvests</option>
           </select>
         </div>
         <div>
@@ -308,6 +309,8 @@
                 <span class="badge text-bg-secondary">Completed cycle</span>
               {% elif event.type == "reminder" %}
                 <span class="badge text-bg-primary">Completed reminder</span>
+              {% elif event.type == "harvest" %}
+                <span class="badge text-bg-success">Harvest</span>
               {% else %}
                 <span class="badge text-bg-info">Note</span>
               {% endif %}

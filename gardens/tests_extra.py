@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from . import views as views_module
 
-from .models import Garden, PodCareReminder, PodPlantingCycle, PodStatus
+from .models import Garden, HarvestUnit, PodCareReminder, PodHarvest, PodPlantingCycle, PodStatus
 from .tasks import send_due_care_reminder_digests
 
 user_model = get_user_model()
@@ -1261,6 +1261,167 @@ class ExtraTests(TestCase):
         self.assertEqual(invalid.context['garden_filter'], '')
         self.assertEqual(invalid.context['status_filter'], 'open')
         self.assertEqual(len(invalid.context['reminders']), 2)
+
+    def test_owner_can_record_and_delete_harvest(self):
+        user = user_model.objects.create_user(username='harvestowner', password='pass')
+        garden = user.gardens.create(name='Harvest Garden')
+        pod = garden.pods.create(position=1, plant_name='Basil', status=PodStatus.HARVESTING)
+        self.client.force_login(user)
+
+        add_resp = self.client.post(
+            reverse('gardens:pod_harvest_add', args=[garden.id, pod.position]),
+            {
+                'harvested_at': views_module.timezone.localdate().isoformat(),
+                'amount': '42.50',
+                'unit': HarvestUnit.GRAM,
+                'note': 'First cutting',
+            },
+        )
+
+        self.assertEqual(add_resp.status_code, 200)
+        harvest = pod.harvests.get()
+        self.assertEqual(harvest.plant_name, 'Basil')
+        self.assertEqual(str(harvest.amount), '42.50')
+        self.assertEqual(harvest.unit, HarvestUnit.GRAM)
+        self.assertEqual(harvest.note, 'First cutting')
+        self.assertContains(add_resp, 'Harvest recorded.')
+        self.assertContains(add_resp, '42.50')
+
+        delete_resp = self.client.post(
+            reverse(
+                'gardens:pod_harvest_delete',
+                args=[garden.id, pod.position, harvest.id],
+            )
+        )
+        self.assertEqual(delete_resp.status_code, 200)
+        self.assertFalse(PodHarvest.objects.filter(id=harvest.id).exists())
+        self.assertContains(delete_resp, 'Harvest record deleted.')
+
+    def test_harvest_validation_rejects_bad_quantity_and_unit(self):
+        user = user_model.objects.create_user(username='harvestvalidation', password='pass')
+        garden = user.gardens.create(name='Validation Garden')
+        pod = garden.pods.create(position=1, plant_name='Mint')
+        self.client.force_login(user)
+
+        bad_amount = self.client.post(
+            reverse('gardens:pod_harvest_add', args=[garden.id, pod.position]),
+            {'amount': '-2', 'unit': HarvestUnit.GRAM},
+        )
+        self.assertEqual(bad_amount.status_code, 200)
+        self.assertContains(bad_amount, 'positive harvest quantity')
+        self.assertFalse(pod.harvests.exists())
+
+        bad_unit = self.client.post(
+            reverse('gardens:pod_harvest_add', args=[garden.id, pod.position]),
+            {'amount': '2', 'unit': 'INVALID'},
+        )
+        self.assertEqual(bad_unit.status_code, 200)
+        self.assertContains(bad_unit, 'Choose a harvest unit')
+        self.assertFalse(pod.harvests.exists())
+
+    def test_harvest_actions_enforce_garden_ownership(self):
+        owner = user_model.objects.create_user(username='harvestprivate', password='pass')
+        other = user_model.objects.create_user(username='harvestother', password='pass')
+        garden = owner.gardens.create(name='Private Harvest')
+        pod = garden.pods.create(position=1, plant_name='Parsley')
+        harvest = PodHarvest.objects.create(pod=pod, plant_name='Parsley')
+        self.client.force_login(other)
+
+        add_resp = self.client.post(
+            reverse('gardens:pod_harvest_add', args=[garden.id, pod.position]),
+            {'amount': '1', 'unit': HarvestUnit.COUNT},
+        )
+        delete_resp = self.client.post(
+            reverse(
+                'gardens:pod_harvest_delete',
+                args=[garden.id, pod.position, harvest.id],
+            )
+        )
+
+        self.assertEqual(add_resp.status_code, 404)
+        self.assertEqual(delete_resp.status_code, 404)
+        self.assertTrue(PodHarvest.objects.filter(id=harvest.id).exists())
+
+    def test_harvest_snapshots_plant_name_before_later_pod_changes(self):
+        user = user_model.objects.create_user(username='harvestsnapshot', password='pass')
+        garden = user.gardens.create(name='Snapshot Garden')
+        pod = garden.pods.create(position=1, plant_name='Lettuce')
+        self.client.force_login(user)
+
+        self.client.post(
+            reverse('gardens:pod_harvest_add', args=[garden.id, pod.position]),
+            {'amount': '3', 'unit': HarvestUnit.COUNT},
+        )
+        pod.plant_name = 'Basil'
+        pod.save(update_fields=['plant_name'])
+
+        self.assertEqual(pod.harvests.get().plant_name, 'Lettuce')
+
+    def test_garden_activity_timeline_can_filter_harvests(self):
+        user = user_model.objects.create_user(username='harvesttimeline', password='pass')
+        garden = user.gardens.create(name='Harvest Timeline')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Basil',
+            amount='12.50',
+            unit=HarvestUnit.GRAM,
+            note='Trimmed tops',
+        )
+        pod.notes.create(note='Unrelated note')
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:garden_detail', args=[garden.id]),
+            {'activity_type': 'harvest'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.context['activity_events']), 1)
+        event = resp.context['activity_events'][0]
+        self.assertEqual(event['type'], 'harvest')
+        self.assertIn('Basil', event['detail'])
+        self.assertIn('12.50 g', event['detail'])
+        self.assertIn('Trimmed tops', event['detail'])
+
+    def test_archive_roundtrip_preserves_harvest_records(self):
+        user = user_model.objects.create_user(username='harvestarchive', password='pass')
+        garden = user.gardens.create(name='Harvest Archive', device_type='AHOPEGARDEN_12')
+        pod = garden.pods.create(position=1, plant_name='Basil')
+        harvest = PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Basil',
+            harvested_at=views_module.timezone.localdate() - views_module.timedelta(days=2),
+            amount='75.25',
+            unit=HarvestUnit.GRAM,
+            note='Large cutting',
+        )
+        self.client.force_login(user)
+
+        export_resp = self.client.get(
+            reverse('gardens:garden_export_archive', args=[garden.id])
+        )
+        self.assertEqual(export_resp.status_code, 200)
+
+        upload = SimpleUploadedFile(
+            'harvest-archive.zip',
+            export_resp.content,
+            content_type='application/zip',
+        )
+        import_resp = self.client.post(
+            reverse('gardens:garden_import_json'),
+            {'import_file': upload},
+            follow=True,
+        )
+        self.assertEqual(import_resp.status_code, 200)
+
+        imported = user.gardens.exclude(id=garden.id).get()
+        imported_harvest = imported.pods.get(position=1).harvests.get()
+        self.assertEqual(imported_harvest.plant_name, harvest.plant_name)
+        self.assertEqual(imported_harvest.harvested_at, harvest.harvested_at)
+        self.assertEqual(imported_harvest.amount, views_module.Decimal(str(harvest.amount)))
+        self.assertEqual(imported_harvest.unit, harvest.unit)
+        self.assertEqual(imported_harvest.note, harvest.note)
 
     def test_owner_can_add_complete_reopen_and_delete_care_reminder(self):
         user = user_model.objects.create_user(username='reminderowner', password='pass')

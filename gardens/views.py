@@ -5,6 +5,7 @@ import json
 import secrets
 import zipfile
 from datetime import datetime, time, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
@@ -27,7 +28,7 @@ from django.views.decorators.http import require_http_methods
 
 from .device_templates import get_device_template, try_load_svg_and_map
 from .forms import GardenForm, PodCareReminderForm, PodForm, PodNoteForm
-from .models import Garden, Pod, PodCareReminder, PodNote, PodPlantingCycle, PodStatus
+from .models import Garden, HarvestUnit, Pod, PodCareReminder, PodHarvest, PodNote, PodPlantingCycle, PodStatus
 from .models import DeveloperAccess, DeveloperApiUsageDaily, GlobalNote
 from .forms import GlobalNoteForm
 from .tasks import queue_or_send_templated_email
@@ -143,7 +144,7 @@ def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNo
 
     pods_by_position = {
         pod.position: pod
-        for pod in garden.pods.all().prefetch_related("notes", "care_reminders").order_by("position")
+        for pod in garden.pods.all().prefetch_related("notes", "care_reminders", "harvests").order_by("position")
     }
     for pod_payload in payload["pods"]:
         pod = pods_by_position[pod_payload["position"]]
@@ -176,6 +177,18 @@ def _garden_to_archive_dict(garden: Garden) -> tuple[dict, list[tuple[str, PodNo
                 "created_at": reminder.created_at.isoformat(),
             }
             for reminder in pod.care_reminders.all().order_by("due_date", "id")
+        ]
+
+        pod_payload["harvests"] = [
+            {
+                "plant_name": harvest.plant_name,
+                "harvested_at": harvest.harvested_at.isoformat(),
+                "amount": str(harvest.amount) if harvest.amount is not None else None,
+                "unit": harvest.unit,
+                "note": harvest.note,
+                "created_at": harvest.created_at.isoformat(),
+            }
+            for harvest in pod.harvests.all().order_by("harvested_at", "id")
         ]
 
     return payload, photo_entries
@@ -444,6 +457,55 @@ def _apply_single_pod(garden_obj: Garden, item: dict, archive_photos: dict[str, 
             PodCareReminder.objects.filter(pk=reminder_obj.pk).update(
                 created_at=created_at_value,
             )
+
+
+    harvests = item.get("harvests") or []
+    if isinstance(harvests, list):
+        valid_units = {value for value, _label in HarvestUnit.choices}
+        for harvest in harvests:
+            if not isinstance(harvest, dict):
+                continue
+
+            harvested_at_value = timezone.localdate()
+            harvested_at_raw = harvest.get("harvested_at")
+            if harvested_at_raw:
+                try:
+                    harvested_at_value = timezone.datetime.fromisoformat(harvested_at_raw).date()
+                except (TypeError, ValueError):
+                    harvested_at_value = timezone.localdate()
+
+            amount_value = None
+            amount_raw = harvest.get("amount")
+            if amount_raw not in (None, ""):
+                try:
+                    amount_value = Decimal(str(amount_raw))
+                except (InvalidOperation, TypeError, ValueError):
+                    amount_value = None
+
+            unit = harvest.get("unit") or ""
+            if unit not in valid_units:
+                unit = ""
+
+            harvest_obj = PodHarvest.objects.create(
+                pod=pod,
+                plant_name=(harvest.get("plant_name") or "")[:120],
+                harvested_at=harvested_at_value,
+                amount=amount_value,
+                unit=unit,
+                note=(harvest.get("note") or "")[:240],
+            )
+
+            created_at_raw = harvest.get("created_at")
+            if created_at_raw:
+                try:
+                    created_at_value = timezone.datetime.fromisoformat(created_at_raw)
+                    if timezone.is_naive(created_at_value):
+                        created_at_value = timezone.make_aware(created_at_value)
+                    PodHarvest.objects.filter(pk=harvest_obj.pk).update(
+                        created_at=created_at_value
+                    )
+                except (TypeError, ValueError):
+                    pass
 
 
 def _apply_imported_pods(garden_obj: Garden, pods_list: list[dict], archive_photos: dict[str, bytes] | None = None) -> None:
@@ -1044,7 +1106,7 @@ def garden_delete(request, garden_id: int):
 # ---------------------------
 def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position: str = "") -> list[dict]:
     """Build a newest-first timeline from existing garden data."""
-    allowed_types = {"", "planting", "note", "cycle", "reminder"}
+    allowed_types = {"", "planting", "note", "cycle", "reminder", "harvest"}
     if event_type not in allowed_types:
         event_type = ""
 
@@ -1054,7 +1116,7 @@ def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position
         selected_position = None
 
     events: list[dict] = []
-    pods = garden.pods.all().prefetch_related("notes", "planting_cycles", "care_reminders").order_by("position")
+    pods = garden.pods.all().prefetch_related("notes", "planting_cycles", "care_reminders", "harvests").order_by("position")
     for pod in pods:
         if selected_position is not None and pod.position != selected_position:
             continue
@@ -1109,6 +1171,27 @@ def _garden_activity_timeline(garden: Garden, event_type: str = "", pod_position
                     "has_photo": False,
                 })
 
+        if event_type in ("", "harvest"):
+            for harvest in pod.harvests.all():
+                harvested_dt = timezone.make_aware(
+                    datetime.combine(harvest.harvested_at, time.min),
+                    timezone.get_current_timezone(),
+                )
+                amount_text = ""
+                if harvest.amount is not None:
+                    amount_text = f" · {harvest.amount:g} {harvest.get_unit_display()}"
+                detail = f"{harvest.plant_name or 'Unnamed plant'}{amount_text}"
+                if harvest.note:
+                    detail = f"{detail} · {harvest.note}"
+                events.append({
+                    "type": "harvest",
+                    "timestamp": harvested_dt,
+                    "pod_position": pod.position,
+                    "title": f"Pod {pod.position} harvest",
+                    "detail": detail,
+                    "has_photo": False,
+                })
+
     events.sort(key=lambda event: event["timestamp"], reverse=True)
     return events[:50]
 
@@ -1127,7 +1210,7 @@ def garden_detail(request, garden_id: int):
     activity_type = (request.GET.get("activity_type") or "").strip()
     activity_pod = (request.GET.get("activity_pod") or "").strip()
     activity_events = _garden_activity_timeline(garden, activity_type, activity_pod)
-    if activity_type not in {"", "planting", "note", "cycle", "reminder"}:
+    if activity_type not in {"", "planting", "note", "cycle", "reminder", "harvest"}:
         activity_type = ""
     if activity_pod and not activity_pod.isdigit():
         activity_pod = ""
@@ -1312,6 +1395,90 @@ def pod_note_edit(request, garden_id: int, position: int, note_id: int):
         "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
         "edit_error_note_id": note.id if form.errors else None,
         "edit_note_form": form if form.errors else None,
+    })
+
+
+@require_http_methods(["POST"])
+def pod_harvest_add(request, garden_id: int, position: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+
+    harvested_at_raw = (request.POST.get("harvested_at") or "").strip()
+    amount_raw = (request.POST.get("amount") or "").strip()
+    unit = (request.POST.get("unit") or "").strip()
+    note = (request.POST.get("note") or "").strip()[:240]
+
+    try:
+        harvested_at = (
+            timezone.datetime.fromisoformat(harvested_at_raw).date()
+            if harvested_at_raw
+            else timezone.localdate()
+        )
+    except ValueError:
+        harvested_at = None
+
+    amount = None
+    if amount_raw:
+        try:
+            amount = Decimal(amount_raw)
+            if amount <= 0:
+                raise InvalidOperation
+        except (InvalidOperation, ValueError):
+            amount = None
+            error = "Enter a positive harvest quantity."
+        else:
+            error = None
+    else:
+        error = None
+
+    valid_units = {value for value, _label in HarvestUnit.choices}
+    if amount is not None and unit not in valid_units:
+        error = "Choose a harvest unit."
+    if harvested_at is None:
+        error = "Enter a valid harvest date."
+
+    if error is None:
+        PodHarvest.objects.create(
+            pod=pod,
+            plant_name=pod.plant_name[:120],
+            harvested_at=harvested_at,
+            amount=amount,
+            unit=unit if amount is not None else "",
+            note=note,
+        )
+        notice = "Harvest recorded."
+    else:
+        notice = None
+
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": PodForm(instance=pod),
+        "note_form": PodNoteForm(),
+        "today": timezone.localdate(),
+        "notice": notice,
+        "error": error,
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
+    })
+
+
+@require_http_methods(["POST"])
+def pod_harvest_delete(request, garden_id: int, position: int, harvest_id: int):
+    garden = _get_editable_garden_or_404(request, garden_id)
+    pod = get_object_or_404(Pod, garden=garden, position=position)
+    harvest = get_object_or_404(PodHarvest, id=harvest_id, pod=pod)
+    harvest.delete()
+
+    return render(request, PARTIAL_POD_PANEL, {
+        "garden": garden,
+        "pod": pod,
+        "pod_form": PodForm(instance=pod),
+        "note_form": PodNoteForm(),
+        "today": timezone.localdate(),
+        "notice": "Harvest record deleted.",
+        "is_guest": garden.is_guest,
+        "guest_notes_remaining": _guest_notes_remaining(garden) if garden.is_guest else None,
     })
 
 

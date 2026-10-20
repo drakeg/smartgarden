@@ -70,6 +70,71 @@
 
 <hr class="my-3">
 
+<div class="fw-semibold mb-2">Harvests</div>
+<form
+  class="mb-3"
+  hx-post="{% url 'gardens:pod_harvest_add' garden.id pod.position %}"
+  hx-target="#sidepanel"
+  hx-swap="innerHTML"
+>
+  {% csrf_token %}
+  <div class="row g-2 mb-2">
+    <div class="col-6">
+      <label class="form-label small" for="harvest_date_{{ pod.position }}">Harvest date</label>
+      <input id="harvest_date_{{ pod.position }}" class="form-control" type="date" name="harvested_at" value="{{ today|date:'Y-m-d' }}">
+    </div>
+    <div class="col-3">
+      <label class="form-label small" for="harvest_amount_{{ pod.position }}">Amount</label>
+      <input id="harvest_amount_{{ pod.position }}" class="form-control" type="number" min="0.01" step="0.01" name="amount" placeholder="0">
+    </div>
+    <div class="col-3">
+      <label class="form-label small" for="harvest_unit_{{ pod.position }}">Unit</label>
+      <select id="harvest_unit_{{ pod.position }}" class="form-select" name="unit">
+        <option value="">—</option>
+        <option value="GRAM">g</option>
+        <option value="OUNCE">oz</option>
+        <option value="POUND">lb</option>
+        <option value="COUNT">count</option>
+      </select>
+    </div>
+  </div>
+  <label class="form-label small" for="harvest_note_{{ pod.position }}">Note (optional)</label>
+  <input id="harvest_note_{{ pod.position }}" class="form-control mb-2" type="text" name="note" maxlength="240" placeholder="First basil cutting…">
+  <button class="btn btn-outline-success w-100" type="submit">Record Harvest</button>
+</form>
+
+{% if pod.harvests.all %}
+  <div class="vstack gap-2 mb-3">
+    {% for harvest in pod.harvests.all|slice:":8" %}
+      <div class="border rounded-3 p-2 bg-white">
+        <div class="d-flex justify-content-between gap-2">
+          <div>
+            <div class="fw-semibold">{{ harvest.plant_name|default:"Unnamed plant" }}</div>
+            <div class="small muted">
+              {{ harvest.harvested_at }}
+              {% if harvest.amount is not None %} · {{ harvest.amount }} {{ harvest.get_unit_display }}{% endif %}
+            </div>
+            {% if harvest.note %}<div class="small mt-1">{{ harvest.note }}</div>{% endif %}
+          </div>
+          <form
+            hx-post="{% url 'gardens:pod_harvest_delete' garden.id pod.position harvest.id %}"
+            hx-target="#sidepanel"
+            hx-swap="innerHTML"
+            hx-confirm="Delete this harvest record?"
+          >
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="muted small mb-3">No harvests recorded yet.</div>
+{% endif %}
+
+<hr class="my-3">
+
 <div class="fw-semibold mb-2">Care reminders</div>
 <form
   class="mb-3"

@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework.authtoken.models import Token
 
-from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, Pod, PodCareReminder, PodPlantingCycle, PodStatus
+from .models import DeveloperAccess, DeveloperAccessStatus, DeveloperApiUsageDaily, DeveloperPlan, Garden, GlobalNote, HarvestUnit, Pod, PodCareReminder, PodHarvest, PodPlantingCycle, PodStatus
 
 user_model = get_user_model()
 
@@ -53,6 +53,45 @@ class ApiTests(APITestCase):
         resp = self.client.get('/api/gardens/?search=Beta')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json().get('results', []), [])
+
+    def test_pod_api_exposes_harvest_history_read_only(self):
+        garden = Garden.objects.create(owner=self.user, name='Harvest API Garden')
+        pod = Pod.objects.create(garden=garden, position=1, plant_name='Basil')
+        harvest = PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Basil',
+            amount='20.00',
+            unit=HarvestUnit.GRAM,
+            note='API harvest',
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+        resp = self.client.get(f'/api/pods/{pod.id}/')
+
+        self.assertEqual(resp.status_code, 200)
+        harvests = resp.json()['harvests']
+        self.assertEqual(len(harvests), 1)
+        self.assertEqual(harvests[0]['id'], harvest.id)
+        self.assertEqual(harvests[0]['plant_name'], 'Basil')
+        self.assertEqual(harvests[0]['unit'], HarvestUnit.GRAM)
+
+        update = self.client.patch(
+            f'/api/pods/{pod.id}/',
+            {
+                'plant_name': 'Parsley',
+                'harvests': [{
+                    'plant_name': 'Injected',
+                    'amount': '999',
+                    'unit': HarvestUnit.POUND,
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(update.status_code, 200)
+        harvest.refresh_from_db()
+        self.assertEqual(harvest.plant_name, 'Basil')
+        self.assertEqual(str(harvest.amount), '20.00')
+        self.assertEqual(pod.harvests.count(), 1)
 
     def test_pod_api_exposes_care_reminders_read_only(self):
         garden = Garden.objects.create(owner=self.user, name='Reminder API Garden')

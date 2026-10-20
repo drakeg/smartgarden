@@ -15,6 +15,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - Complete garden backup ZIP export/import including pod-note photos, while preserving legacy JSON portability
 - Quick pod planting actions for "Plant Today" and confirmed reset while preserving note history
 - Completed planting-cycle history records the outgoing plant, planted date, final status, and end time whenever a non-empty pod is reset
+- Per-pod harvest records with date, optional quantity/unit, notes, timeline visibility, read-only API history, and ZIP backup preservation
 - Garden-level pod status overview with counts for each growth state
 - Filterable garden activity timeline combining current plantings, pod notes/photo notes, completed planting cycles, and completed care reminders
 - Pod care reminders with due dates, inline editing/rescheduling, overdue highlighting, completion/reopen controls, garden-level due counts, and ZIP backup preservation
