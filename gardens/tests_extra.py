@@ -1020,6 +1020,110 @@ class ExtraTests(TestCase):
         self.assertEqual(imported.pods.get(position=1).plant_name, '')
         self.assertEqual(imported.pods.get(position=2).plant_name, 'Basil')
 
+    def test_care_calendar_export_requires_authentication(self):
+        resp = self.client.get(reverse('gardens:care_calendar_export'))
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse('gardens:login'), resp['Location'])
+
+    @override_settings(SITE_BASE_URL='https://garden.example.test')
+    def test_care_calendar_export_includes_only_open_owned_account_reminders(self):
+        owner = user_model.objects.create_user(username='icalowner', password='pass')
+        other = user_model.objects.create_user(username='icalother', password='pass')
+        mine = owner.gardens.create(name='My Garden')
+        theirs = other.gardens.create(name='Other Garden')
+        guest = Garden.objects.create(
+            name='Guest Garden',
+            is_guest=True,
+            guest_token='ical-guest-token',
+        )
+        mine_pod = mine.pods.create(position=2)
+        other_pod = theirs.pods.create(position=1)
+        guest_pod = guest.pods.create(position=1)
+        today = views_module.timezone.localdate()
+
+        open_reminder = PodCareReminder.objects.create(
+            pod=mine_pod,
+            title='Nutrients, water; check',
+            due_date=today + views_module.timedelta(days=2),
+        )
+        PodCareReminder.objects.create(
+            pod=mine_pod,
+            title='Completed task',
+            due_date=today,
+            completed_at=views_module.timezone.now(),
+        )
+        PodCareReminder.objects.create(
+            pod=other_pod,
+            title='Other task',
+            due_date=today,
+        )
+        PodCareReminder.objects.create(
+            pod=guest_pod,
+            title='Guest task',
+            due_date=today,
+        )
+        self.client.force_login(owner)
+
+        resp = self.client.get(reverse('gardens:care_calendar_export'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'text/calendar; charset=utf-8')
+        self.assertIn('smart-garden-care.ics', resp['Content-Disposition'])
+        body = resp.content.decode('utf-8')
+        self.assertIn('BEGIN:VCALENDAR\r\n', body)
+        self.assertIn(
+            f'UID:smartgarden-care-reminder-{open_reminder.id}@garden.example.test',
+            body,
+        )
+        self.assertIn(
+            f'DTSTART;VALUE=DATE:{open_reminder.due_date.strftime("%Y%m%d")}',
+            body,
+        )
+        self.assertIn(
+            f'DTEND;VALUE=DATE:{(open_reminder.due_date + views_module.timedelta(days=1)).strftime("%Y%m%d")}',
+            body,
+        )
+        self.assertIn('SUMMARY:Nutrients\\, water\\; check', body)
+        self.assertIn('Garden: My Garden\\nPod: 2', body)
+        self.assertIn(
+            f'URL:https://garden.example.test{reverse("gardens:garden_detail", args=[mine.id])}',
+            body,
+        )
+        self.assertNotIn('Completed task', body)
+        self.assertNotIn('Other task', body)
+        self.assertNotIn('Guest task', body)
+
+    def test_care_calendar_export_can_filter_to_one_owned_garden(self):
+        user = user_model.objects.create_user(username='icalfilter', password='pass')
+        first = user.gardens.create(name='First')
+        second = user.gardens.create(name='Second')
+        first_reminder = PodCareReminder.objects.create(
+            pod=first.pods.create(position=1),
+            title='First reminder',
+            due_date=views_module.timezone.localdate(),
+        )
+        PodCareReminder.objects.create(
+            pod=second.pods.create(position=1),
+            title='Second reminder',
+            due_date=views_module.timezone.localdate(),
+        )
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:care_calendar_export'),
+            {'garden': str(first.id)},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('First reminder', body)
+        self.assertNotIn('Second reminder', body)
+        self.assertIn(
+            f'UID:smartgarden-care-reminder-{first_reminder.id}@testserver',
+            body,
+        )
+
     def test_care_dashboard_requires_authentication(self):
         resp = self.client.get(reverse('gardens:care_dashboard'))
 
