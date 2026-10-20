@@ -786,8 +786,7 @@ def care_calendar_export(request):
         base_url = request.build_absolute_uri("/").rstrip("/")
         uid_host = request.get_host().split(":", 1)[0] or "smartgarden.local"
 
-    now_utc = timezone.now().astimezone(timezone.utc)
-    dtstamp = now_utc.strftime("%Y%m%dT%H%M%SZ")
+    dtstamp = timezone.now().strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
