@@ -817,4 +817,28 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/care-dashboard`
 
+**Status:** Complete — merged in PR #55.
+
+
+### Sprint 35 — Care Calendar Export
+
+**Outcome:** Let growers take open Smart Garden care reminders into external calendar apps without adding another scheduling system or exposing reminders publicly.
+
+**Acceptance criteria:**
+- `/care/calendar.ics` requires authentication.
+- Export includes only open reminders from the signed-in user's non-guest account gardens.
+- Completed reminders, other users' reminders, and guest-garden reminders are excluded.
+- Optional `garden` query parameter limits export to one owned garden.
+- Each reminder is emitted as an all-day iCalendar `VEVENT` on its due date.
+- Events use stable reminder-based UIDs.
+- Calendar text values are escaped for iCalendar special characters and newlines.
+- Events include garden name, pod position, and a Smart Garden link.
+- `SITE_BASE_URL` is used for links/UID host when configured; request host is the fallback.
+- Care Dashboard exposes a download action and preserves its current garden filter.
+- Export is download-only and does not create a public subscription token or new persistence model.
+- Regression tests cover authentication, ownership scoping, completed/guest exclusion, filtering, escaping, stable UIDs, all-day dates, and links.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/care-calendar-export`
+
 **Status:** In review.

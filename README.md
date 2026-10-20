@@ -19,6 +19,7 @@ A small Django app to model and manage Smart Garden pods. This repository contai
 - Filterable garden activity timeline combining current plantings, pod notes/photo notes, completed planting cycles, and completed care reminders
 - Pod care reminders with due dates, inline editing/rescheduling, overdue highlighting, completion/reopen controls, garden-level due counts, and ZIP backup preservation
 - Account-level Care Dashboard for open, overdue, due-today, upcoming, and completed reminders across all owned gardens
+- Authenticated iCalendar (.ics) export of open care reminders for import into external calendars
 - Optional opt-in daily email digests for due/overdue care reminders using the existing Celery/SMTP stack
 - Read-only public garden snapshots with pod status/age while keeping notes and photos private
 - My Gardens dashboard summaries for active, harvesting, total pods, sharing state, and latest activity

@@ -8,6 +8,10 @@
     <h1 class="h3 mb-1">Care Dashboard</h1>
     <p class="text-muted mb-0">Open and completed pod-care reminders across all of your account gardens.</p>
   </div>
+  <a class="btn btn-outline-success"
+     href="{% url 'gardens:care_calendar_export' %}{% if garden_filter %}?garden={{ garden_filter }}{% endif %}">
+    Export open reminders (.ics)
+  </a>
 </div>
 
 <div class="row g-3 mb-4">

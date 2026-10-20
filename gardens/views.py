@@ -6,6 +6,7 @@ import secrets
 import zipfile
 from datetime import datetime, time, timedelta
 from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
@@ -745,7 +746,88 @@ def guest_start(request):
 # ---------------------------
 # Gardens (Account-only list/create)
 # ---------------------------
-@require_http_methods(["GET", "POST"])
+def _ical_escape(value: str) -> str:
+    return (
+        value.replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace("\r", "")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+    )
+
+
+@login_required(login_url="gardens:login")
+@require_http_methods(["GET"])
+def care_calendar_export(request):
+    """Download open care reminders as an iCalendar file."""
+    garden_filter = (request.GET.get("garden") or "").strip()
+    reminders = PodCareReminder.objects.filter(
+        pod__garden__owner=request.user,
+        pod__garden__is_guest=False,
+        completed_at__isnull=True,
+    ).select_related("pod", "pod__garden").order_by(
+        "due_date", "pod__garden__name", "pod__position", "id"
+    )
+
+    if garden_filter:
+        try:
+            selected_garden_id = int(garden_filter)
+        except (TypeError, ValueError):
+            selected_garden_id = None
+        if selected_garden_id is not None:
+            reminders = reminders.filter(pod__garden_id=selected_garden_id)
+
+    configured_base = settings.SITE_BASE_URL
+    if configured_base:
+        base_url = configured_base
+        uid_host = urlparse(configured_base).hostname or "smartgarden.local"
+    else:
+        base_url = request.build_absolute_uri("/").rstrip("/")
+        uid_host = request.get_host().split(":", 1)[0] or "smartgarden.local"
+
+    dtstamp = timezone.now().strftime("%Y%m%dT%H%M%SZ")
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Smart Garden//Care Reminders//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:Smart Garden Care",
+    ]
+
+    for reminder in reminders[:500]:
+        due_start = reminder.due_date.strftime("%Y%m%d")
+        due_end = (reminder.due_date + timedelta(days=1)).strftime("%Y%m%d")
+        garden_url = (
+            f"{base_url}"
+            f"{reverse('gardens:garden_detail', args=[reminder.pod.garden_id])}"
+        )
+        description = (
+            f"Garden: {reminder.pod.garden.name}\n"
+            f"Pod: {reminder.pod.position}\n"
+            f"Open in Smart Garden: {garden_url}"
+        )
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:smartgarden-care-reminder-{reminder.id}@{uid_host}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;VALUE=DATE:{due_start}",
+            f"DTEND;VALUE=DATE:{due_end}",
+            f"SUMMARY:{_ical_escape(reminder.title)}",
+            f"DESCRIPTION:{_ical_escape(description)}",
+            f"URL:{garden_url}",
+            "STATUS:CONFIRMED",
+            "TRANSP:TRANSPARENT",
+            "END:VEVENT",
+        ])
+
+    lines.append("END:VCALENDAR")
+    content = "\r\n".join(lines) + "\r\n"
+    response = HttpResponse(content, content_type="text/calendar; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="smart-garden-care.ics"'
+    return response
+
+
 @login_required(login_url="gardens:login")
 @require_http_methods(["GET"])
 def care_dashboard(request):
