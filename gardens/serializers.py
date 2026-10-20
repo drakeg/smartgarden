@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Garden, Pod, PodCareReminder, PodNote, PodPlantingCycle, GlobalNote
+from .models import Garden, Pod, PodCareReminder, PodHarvest, PodNote, PodPlantingCycle, GlobalNote
 
 
 user_model = get_user_model()
@@ -17,6 +17,21 @@ class PodNoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = PodNote
         fields = ("id", "pod", "created_at", "note", "photo")
+
+
+class PodHarvestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PodHarvest
+        fields = (
+            "id",
+            "plant_name",
+            "harvested_at",
+            "amount",
+            "unit",
+            "note",
+            "created_at",
+        )
+        read_only_fields = fields
 
 
 class PodCareReminderSerializer(serializers.ModelSerializer):
@@ -56,10 +71,11 @@ class PodSerializer(serializers.ModelSerializer):
     notes = PodNoteSerializer(many=True, read_only=True)
     planting_cycles = PodPlantingCycleSerializer(many=True, read_only=True)
     care_reminders = PodCareReminderSerializer(many=True, read_only=True)
+    harvests = PodHarvestSerializer(many=True, read_only=True)
 
     class Meta:
         model = Pod
-        fields = ("id", "garden", "position", "plant_name", "planted_at", "status", "updated_at", "notes", "planting_cycles", "care_reminders")
+        fields = ("id", "garden", "position", "plant_name", "planted_at", "status", "updated_at", "notes", "planting_cycles", "care_reminders", "harvests")
 
 
 class GardenSerializer(serializers.ModelSerializer):
