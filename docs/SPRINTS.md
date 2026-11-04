@@ -867,4 +867,33 @@ Future product work should be recorded here or in linked GitHub issues before or
 
 **Branch:** `feature/harvest-records`
 
+**Status:** Complete — merged in PR #57.
+
+
+### Sprint 37 — Harvest Dashboard
+
+**Outcome:** Turn durable harvest records into a useful account-level history and summary view across all owned gardens.
+
+**Acceptance criteria:**
+- `/harvests/` requires authentication.
+- Dashboard includes only harvests from the signed-in user's non-guest account gardens.
+- Other users' and guest-garden harvests are excluded.
+- Default view shows the last 90 days of harvests newest-first.
+- Date-range filters support 30 days, 90 days, 365 days, and all time.
+- Garden filter limits results to one owned garden.
+- Plant search filters case-insensitively against snapshotted plant names.
+- Invalid range/garden filters fall back safely.
+- Summary cards show matching harvest record, garden, pod, and distinct plant counts.
+- Quantity totals aggregate only matching records and stay separated by unit.
+- Records without a quantity are included in history/counts but excluded from quantity totals.
+- Dashboard shows harvest date, plant snapshot, optional quantity/unit, note, garden, and pod.
+- Each record links back to its owning garden for action.
+- Authenticated navigation exposes the Harvest Dashboard.
+- Results are capped to the first 250 matching records.
+- No new database table is introduced.
+- Regression tests cover authentication, ownership isolation, guest exclusion, filters, fallback behavior, and unit-safe totals.
+- README and sprint documentation are updated.
+
+**Branch:** `feature/harvest-dashboard`
+
 **Status:** In review.

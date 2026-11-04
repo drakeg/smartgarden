@@ -820,6 +820,89 @@ def _ical_escape(value: str) -> str:
 
 @login_required(login_url="gardens:login")
 @require_http_methods(["GET"])
+def harvest_dashboard(request):
+    """Summarize harvest history across the signed-in user's account gardens."""
+    today = timezone.localdate()
+    range_filter = (request.GET.get("range") or "90").strip().lower()
+    garden_filter = (request.GET.get("garden") or "").strip()
+    plant_filter = (request.GET.get("plant") or "").strip()
+
+    allowed_ranges = {"30", "90", "365", "all"}
+    if range_filter not in allowed_ranges:
+        range_filter = "90"
+
+    harvests = PodHarvest.objects.filter(
+        pod__garden__owner=request.user,
+        pod__garden__is_guest=False,
+    ).select_related("pod", "pod__garden")
+
+    if range_filter != "all":
+        start_date = today - timedelta(days=int(range_filter) - 1)
+        harvests = harvests.filter(harvested_at__gte=start_date)
+    else:
+        start_date = None
+
+    account_gardens = Garden.objects.filter(
+        owner=request.user,
+        is_guest=False,
+    ).order_by("name", "id")
+
+    if garden_filter:
+        try:
+            selected_garden_id = int(garden_filter)
+        except (TypeError, ValueError):
+            selected_garden_id = None
+        if (
+            selected_garden_id is not None
+            and account_gardens.filter(id=selected_garden_id).exists()
+        ):
+            harvests = harvests.filter(pod__garden_id=selected_garden_id)
+        else:
+            garden_filter = ""
+
+    if plant_filter:
+        harvests = harvests.filter(plant_name__icontains=plant_filter)
+
+    summary = {
+        "records": harvests.count(),
+        "gardens": harvests.values("pod__garden_id").distinct().count(),
+        "pods": harvests.values("pod_id").distinct().count(),
+        "plants": harvests.exclude(plant_name="").values("plant_name").distinct().count(),
+    }
+
+    quantity_totals = list(
+        harvests.exclude(amount__isnull=True)
+        .exclude(unit="")
+        .values("unit")
+        .annotate(total=Sum("amount"))
+        .order_by("unit")
+    )
+    unit_labels = dict(HarvestUnit.choices)
+    for item in quantity_totals:
+        item["label"] = unit_labels.get(item["unit"], item["unit"])
+
+    harvests = harvests.order_by(
+        "-harvested_at",
+        "-created_at",
+        "pod__garden__name",
+        "pod__position",
+    )
+
+    return render(request, "gardens/harvest_dashboard.html", {
+        "harvests": list(harvests[:250]),
+        "summary": summary,
+        "quantity_totals": quantity_totals,
+        "account_gardens": account_gardens,
+        "range_filter": range_filter,
+        "garden_filter": garden_filter,
+        "plant_filter": plant_filter,
+        "start_date": start_date,
+        "today": today,
+    })
+
+
+@login_required(login_url="gardens:login")
+@require_http_methods(["GET"])
 def care_calendar_export(request):
     """Download open care reminders as an iCalendar file."""
     garden_filter = (request.GET.get("garden") or "").strip()

@@ -1262,6 +1262,156 @@ class ExtraTests(TestCase):
         self.assertEqual(invalid.context['status_filter'], 'open')
         self.assertEqual(len(invalid.context['reminders']), 2)
 
+    def test_harvest_dashboard_requires_authentication(self):
+        resp = self.client.get(reverse('gardens:harvest_dashboard'))
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse('gardens:login'), resp['Location'])
+
+    def test_harvest_dashboard_is_owner_scoped_and_excludes_guest_gardens(self):
+        owner = user_model.objects.create_user(username='harvestdashowner', password='pass')
+        other = user_model.objects.create_user(username='harvestdashother', password='pass')
+        mine = owner.gardens.create(name='Mine')
+        theirs = other.gardens.create(name='Theirs')
+        guest = Garden.objects.create(
+            name='Guest',
+            is_guest=True,
+            guest_token='harvest-dashboard-guest',
+        )
+        PodHarvest.objects.create(
+            pod=mine.pods.create(position=1),
+            plant_name='Basil',
+            amount='10.00',
+            unit=HarvestUnit.GRAM,
+        )
+        PodHarvest.objects.create(
+            pod=theirs.pods.create(position=1),
+            plant_name='Private Mint',
+            amount='5.00',
+            unit=HarvestUnit.GRAM,
+        )
+        PodHarvest.objects.create(
+            pod=guest.pods.create(position=1),
+            plant_name='Guest Lettuce',
+            amount='3.00',
+            unit=HarvestUnit.COUNT,
+        )
+        self.client.force_login(owner)
+
+        resp = self.client.get(reverse('gardens:harvest_dashboard'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Basil')
+        self.assertNotContains(resp, 'Private Mint')
+        self.assertNotContains(resp, 'Guest Lettuce')
+        self.assertEqual(resp.context['summary']['records'], 1)
+
+    def test_harvest_dashboard_filters_by_range_garden_and_plant(self):
+        user = user_model.objects.create_user(username='harvestdashfilter', password='pass')
+        first = user.gardens.create(name='First Garden')
+        second = user.gardens.create(name='Second Garden')
+        today = views_module.timezone.localdate()
+        recent = PodHarvest.objects.create(
+            pod=first.pods.create(position=1),
+            plant_name='Basil',
+            harvested_at=today - views_module.timedelta(days=5),
+            amount='12.00',
+            unit=HarvestUnit.GRAM,
+        )
+        PodHarvest.objects.create(
+            pod=first.pods.create(position=2),
+            plant_name='Lettuce',
+            harvested_at=today - views_module.timedelta(days=45),
+            amount='2.00',
+            unit=HarvestUnit.COUNT,
+        )
+        PodHarvest.objects.create(
+            pod=second.pods.create(position=1),
+            plant_name='Basil',
+            harvested_at=today - views_module.timedelta(days=10),
+            amount='1.00',
+            unit=HarvestUnit.OUNCE,
+        )
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:harvest_dashboard'),
+            {'range': '30', 'garden': str(first.id), 'plant': 'basil'},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([harvest.id for harvest in resp.context['harvests']], [recent.id])
+        self.assertEqual(resp.context['summary']['records'], 1)
+        self.assertEqual(resp.context['garden_filter'], str(first.id))
+        self.assertEqual(resp.context['plant_filter'], 'basil')
+        self.assertEqual(resp.context['range_filter'], '30')
+
+    def test_harvest_dashboard_keeps_quantity_totals_separate_by_unit(self):
+        user = user_model.objects.create_user(username='harvestdashtotals', password='pass')
+        garden = user.gardens.create(name='Totals Garden')
+        pod = garden.pods.create(position=1)
+        PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Basil',
+            amount='10.00',
+            unit=HarvestUnit.GRAM,
+        )
+        PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Basil',
+            amount='5.50',
+            unit=HarvestUnit.GRAM,
+        )
+        PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Tomato',
+            amount='2.00',
+            unit=HarvestUnit.COUNT,
+        )
+        PodHarvest.objects.create(
+            pod=pod,
+            plant_name='Mint',
+            amount=None,
+            unit='',
+        )
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:harvest_dashboard'),
+            {'range': 'all'},
+        )
+
+        totals = {
+            item['unit']: item['total']
+            for item in resp.context['quantity_totals']
+        }
+        self.assertEqual(totals[HarvestUnit.GRAM], views_module.Decimal('15.50'))
+        self.assertEqual(totals[HarvestUnit.COUNT], views_module.Decimal('2.00'))
+        self.assertEqual(len(totals), 2)
+        self.assertEqual(resp.context['summary']['records'], 4)
+        self.assertEqual(resp.context['summary']['plants'], 3)
+
+    def test_harvest_dashboard_invalid_filters_fall_back_safely(self):
+        user = user_model.objects.create_user(username='harvestdashinvalid', password='pass')
+        garden = user.gardens.create(name='Invalid Filter Garden')
+        PodHarvest.objects.create(
+            pod=garden.pods.create(position=1),
+            plant_name='Parsley',
+        )
+        other = user_model.objects.create_user(username='harvestdashforeign', password='pass')
+        foreign_garden = other.gardens.create(name='Foreign Garden')
+        self.client.force_login(user)
+
+        resp = self.client.get(
+            reverse('gardens:harvest_dashboard'),
+            {'range': 'bogus', 'garden': str(foreign_garden.id)},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['range_filter'], '90')
+        self.assertEqual(resp.context['garden_filter'], '')
+        self.assertEqual(resp.context['summary']['records'], 1)
+
     def test_owner_can_record_and_delete_harvest(self):
         user = user_model.objects.create_user(username='harvestowner', password='pass')
         garden = user.gardens.create(name='Harvest Garden')

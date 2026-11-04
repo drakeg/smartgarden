@@ -1,0 +1,121 @@
+{% extends "gardens/base.html" %}
+
+{% block title %}Harvest Dashboard · Smart Garden{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Harvest Dashboard</h1>
+    <p class="text-muted mb-0">Harvest history across all of your account gardens.</p>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="border rounded-3 p-3 bg-white h-100">
+      <div class="text-muted small">Harvest records</div>
+      <div class="fs-4 fw-semibold">{{ summary.records }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="border rounded-3 p-3 bg-white h-100">
+      <div class="text-muted small">Gardens</div>
+      <div class="fs-4 fw-semibold">{{ summary.gardens }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="border rounded-3 p-3 bg-white h-100">
+      <div class="text-muted small">Pods</div>
+      <div class="fs-4 fw-semibold">{{ summary.pods }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="border rounded-3 p-3 bg-white h-100">
+      <div class="text-muted small">Plants</div>
+      <div class="fs-4 fw-semibold">{{ summary.plants }}</div>
+    </div>
+  </div>
+</div>
+
+{% if quantity_totals %}
+<div class="card shadow-sm rounded-4 mb-4">
+  <div class="card-body">
+    <div class="fw-semibold mb-2">Quantity totals</div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for item in quantity_totals %}
+        <span class="badge rounded-pill text-bg-light border">
+          {{ item.total }} {{ item.label }}
+        </span>
+      {% endfor %}
+    </div>
+    <div class="text-muted small mt-2">Totals stay separated by unit and are never converted or mixed.</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm rounded-4 mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label" for="harvest_range">Date range</label>
+        <select id="harvest_range" name="range" class="form-select">
+          <option value="30" {% if range_filter == "30" %}selected{% endif %}>Last 30 days</option>
+          <option value="90" {% if range_filter == "90" %}selected{% endif %}>Last 90 days</option>
+          <option value="365" {% if range_filter == "365" %}selected{% endif %}>Last year</option>
+          <option value="all" {% if range_filter == "all" %}selected{% endif %}>All time</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="harvest_garden">Garden</label>
+        <select id="harvest_garden" name="garden" class="form-select">
+          <option value="">All gardens</option>
+          {% for garden in account_gardens %}
+            <option value="{{ garden.id }}" {% if garden_filter == garden.id|stringformat:"s" %}selected{% endif %}>{{ garden.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="harvest_plant">Plant</label>
+        <input id="harvest_plant" name="plant" class="form-control" value="{{ plant_filter }}" placeholder="Basil, lettuce…">
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if harvests %}
+  <div class="vstack gap-3">
+    {% for harvest in harvests %}
+      <div class="card shadow-sm rounded-4">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between gap-3">
+            <div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h2 class="h5 mb-0">{{ harvest.plant_name|default:"Unnamed plant" }}</h2>
+                {% if harvest.amount is not None %}
+                  <span class="badge text-bg-success">{{ harvest.amount }} {{ harvest.get_unit_display }}</span>
+                {% endif %}
+              </div>
+              <div class="text-muted small">{{ harvest.pod.garden.name }} · Pod {{ harvest.pod.position }}</div>
+              <div class="mt-2">Harvested <strong>{{ harvest.harvested_at }}</strong></div>
+              {% if harvest.note %}<div class="mt-2">{{ harvest.note }}</div>{% endif %}
+            </div>
+            <div>
+              <a class="btn btn-outline-primary btn-sm" href="{% url 'gardens:garden_detail' harvest.pod.garden.id %}">Open Garden</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card shadow-sm rounded-4">
+    <div class="card-body text-center py-5">
+      <h2 class="h5">No harvests match these filters</h2>
+      <p class="text-muted mb-0">Record harvests from a pod's side panel, or adjust the filters above.</p>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
