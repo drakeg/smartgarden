@@ -1,4 +1,7 @@
 # CI status: replace <owner>/<repo> with your GitHub repo
+
+[![License](https://img.shields.io/github/license/drakeg/smartgarden)](https://github.com/drakeg/smartgarden/blob/main/LICENSE)
+
 [![CI](https://github.com/drakeg/smartgarden/actions/workflows/ci.yml/badge.svg)](https://github.com/drakeg/smartgarden/actions/workflows/ci.yml)
 
 # Smart Garden
